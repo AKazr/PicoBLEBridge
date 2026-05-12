@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BLEBridge BLE Devices</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body data-page="ble">
+    <main>
+        <div data-app-header data-title="BLE Devices"></div>
+
+        <section class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>ID</th>
+                        <th>Track</th>
+                        <th>MAC Address</th>
+                        <th>BTHome v2</th>
+                        <th>RSSI</th>
+                        <th>Seen Ago (s)</th>
+                    </tr>
+                </thead>
+                <tbody id="devices-body">
+                    <tr><td colspan="7" class="muted">Loading...</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script>
+        let isEditing = false;
+
+        async function refreshDevices() {
+            if (isEditing) {
+                return;
+            }
+
+            const tableBody = document.getElementById('devices-body');
+
+            try {
+                const response = await fetch('/devices.json', { cache: 'no-store' });
+                const data = await response.json();
+
+                if (!data.devices || data.devices.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="7" class="muted">No BTHome v2 devices seen yet</td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = data.devices
+                    .map((device, index) => {
+                        const deviceId = String(device.device_id);
+                        const name = App.escapeHtml(device.name || device.id || '');
+                        const disabled = device.selected ? '' : 'disabled';
+                        return `<tr>
+                            <td>${index + 1}</td>
+                            <td>
+                                <div class="name-editor">
+                                    <input type="text" maxlength="64" data-device-id="${deviceId}" value="${name}" ${disabled}>
+                                    <button type="button" data-save-name="${deviceId}" ${disabled}>OK</button>
+                                </div>
+                            </td>
+                            <td><input type="checkbox" data-mac="${device.mac}" ${device.selected ? 'checked' : ''}></td>
+                            <td>${device.mac}</td>
+                            <td>${App.escapeHtml(device.bthome_data || '')}</td>
+                            <td>${device.rssi}</td>
+                            <td>${(device.age_ms / 1000).toFixed(1)}</td>
+                        </tr>`;
+                    })
+                    .join('');
+
+                tableBody.querySelectorAll('input[data-device-id]').forEach((input) => {
+                    input.addEventListener('input', () => {
+                        isEditing = true;
+                    });
+                    input.addEventListener('focus', () => {
+                        isEditing = true;
+                    });
+                });
+
+                tableBody.querySelectorAll('input[type="checkbox"][data-mac]').forEach((checkbox) => {
+                        checkbox.addEventListener('change', async (event) => {
+                            const mac = event.target.dataset.mac.replaceAll(':', '');
+                            const enabled = event.target.checked ? '1' : '0';
+                            const row = event.target.closest('tr');
+                            const nameInput = row ? row.querySelector('input[data-device-id]') : null;
+                            const nameButton = row ? row.querySelector('button[data-save-name]') : null;
+
+                            if (nameInput) {
+                                nameInput.disabled = !event.target.checked;
+                            }
+                            if (nameButton) {
+                                nameButton.disabled = !event.target.checked;
+                            }
+
+                            try {
+                                await fetch(`/select.cgi?mac=${mac}&enabled=${enabled}`, { cache: 'no-store' });
+                            } catch (error) {
+                                event.target.checked = !event.target.checked;
+                                if (nameInput) {
+                                    nameInput.disabled = !event.target.checked;
+                                }
+                                if (nameButton) {
+                                    nameButton.disabled = !event.target.checked;
+                                }
+                            }
+                        });
+                });
+
+                tableBody.querySelectorAll('button[data-save-name]').forEach((button) => {
+                    button.addEventListener('click', async (event) => {
+                        const deviceId = event.target.dataset.saveName;
+                        const input = tableBody.querySelector(`input[data-device-id="${deviceId}"]`);
+                        const params = new URLSearchParams({
+                            device_id: deviceId,
+                            name: input ? input.value : ''
+                        });
+
+                        event.target.disabled = true;
+                        try {
+                            await fetch(`/name.cgi?${params.toString()}`, { cache: 'no-store' });
+                        } finally {
+                            event.target.disabled = false;
+                            isEditing = false;
+                            refreshDevices();
+                        }
+                    });
+                });
+            } catch (error) {
+                tableBody.innerHTML = '<tr><td colspan="7" class="muted">Failed to load BLE devices</td></tr>';
+            }
+        }
+
+        App.initHeader();
+        refreshDevices();
+        setInterval(refreshDevices, 1000);
+    </script>
+</body>
+</html>

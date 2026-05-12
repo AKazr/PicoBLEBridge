@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BLEBridge</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body data-page="dashboard">
+    <main>
+        <div data-app-header data-title="BLEBridge"></div>
+
+        <section class="card">
+            <table>
+                <tbody id="status-body">
+                    <tr><td class="muted">Loading status...</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="card">
+            <div class="section-title">
+                <h2>Aggregate View</h2>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>ID</th>
+                        <th>Field Type</th>
+                        <th>Average Value</th>
+                        <th>Samples</th>
+                    </tr>
+                </thead>
+                <tbody id="measurements-body">
+                    <tr><td colspan="5" class="muted">Loading...</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script>
+        async function refreshMeasurements() {
+            const measurementsBody = document.getElementById('measurements-body');
+
+            try {
+                const response = await fetch('/devices.json', { cache: 'no-store' });
+                const data = await response.json();
+
+                if (!data.measurements || data.measurements.length === 0) {
+                    measurementsBody.innerHTML = '<tr><td colspan="5" class="muted">No aggregated measurements yet</td></tr>';
+                    return;
+                }
+
+                measurementsBody.innerHTML = data.measurements
+                    .map((measurement, index) => {
+                        const displayName = measurement.name ? App.escapeHtml(measurement.name) : measurement.id;
+                        return `<tr><td>${index + 1}</td><td>${displayName}</td><td>${measurement.field_type}</td><td>${measurement.average_value}</td><td>${measurement.sample_count}</td></tr>`;
+                    })
+                    .join('');
+            } catch (error) {
+                measurementsBody.innerHTML = '<tr><td colspan="5" class="muted">Failed to load aggregated measurements</td></tr>';
+            }
+        }
+
+        App.initHeader();
+        App.refreshStatus();
+        refreshMeasurements();
+        setInterval(App.refreshStatus, 1000);
+        setInterval(refreshMeasurements, 1000);
+    </script>
+</body>
+</html>

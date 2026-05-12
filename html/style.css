@@ -1,0 +1,192 @@
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px;
+}
+
+main.narrow {
+    max-width: 800px;
+}
+
+h1 {
+    margin: 0;
+    font-size: 2rem;
+}
+
+h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+p {
+    line-height: 1.5;
+    color: #cbd5e1;
+}
+
+a {
+    color: #7dd3fc;
+}
+
+code {
+    color: #7dd3fc;
+}
+
+.app-header {
+    margin-bottom: 24px;
+}
+
+.app-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 10px;
+}
+
+.app-nav a {
+    color: #7dd3fc;
+    text-decoration: none;
+}
+
+.app-nav a.active {
+    color: #e0f2fe;
+    text-decoration: underline;
+}
+
+.card {
+    margin-top: 24px;
+    padding: 20px;
+    border-radius: 8px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    overflow-x: auto;
+}
+
+.section-title {
+    margin-bottom: 8px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+}
+
+th,
+td {
+    padding: 12px 10px;
+    text-align: left;
+    border-bottom: 1px solid #334155;
+    vertical-align: top;
+}
+
+th {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+label {
+    display: block;
+    margin-top: 16px;
+    color: #cbd5e1;
+}
+
+input,
+select,
+button {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 6px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #475569;
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+input[type="checkbox"] {
+    width: auto;
+}
+
+button {
+    margin-top: 0;
+    background: #0369a1;
+    border-color: #0284c7;
+    cursor: pointer;
+}
+
+button.secondary {
+    background: #334155;
+    border-color: #64748b;
+}
+
+.button-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.inline-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.inline-check input {
+    margin: 0;
+}
+
+.name-editor {
+    display: grid;
+    grid-template-columns: minmax(140px, 1fr) 52px;
+    gap: 8px;
+    align-items: center;
+}
+
+.name-editor input,
+.name-editor button {
+    margin-top: 0;
+}
+
+.name-editor button {
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.payload-view {
+    margin: 0;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.muted {
+    color: #94a3b8;
+}
+
+@media (max-width: 640px) {
+    main {
+        padding: 28px 16px;
+    }
+
+    .button-row {
+        grid-template-columns: 1fr;
+    }
+
+    .name-editor {
+        grid-template-columns: 1fr;
+    }
+}

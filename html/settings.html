@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BLEBridge Settings</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body data-page="settings">
+    <main class="narrow">
+        <div data-app-header data-title="Settings"></div>
+
+        <section class="card">
+            <p class="muted">Changes are written to <code>config.ini</code>.</p>
+            <p id="save-status" class="muted">Loading settings...</p>
+            <form id="settings-form">
+                <label>
+                    Mode
+                    <select name="mode" id="mode">
+                        <option value="ap">Access Point</option>
+                        <option value="client">Client</option>
+                    </select>
+                </label>
+
+                <label>
+                    SSID
+                    <input type="text" name="ssid" id="ssid" maxlength="32">
+                </label>
+
+                <label>
+                    Host Name
+                    <input type="text" name="hostname" id="hostname" maxlength="63">
+                </label>
+
+                <label>
+                    Channel
+                    <input type="number" name="channel" id="channel" min="1" max="13">
+                </label>
+
+                <label>
+                    Security
+                    <select name="security" id="security">
+                        <option value="open">Open</option>
+                        <option value="wpa2">WPA2</option>
+                    </select>
+                </label>
+
+                <label>
+                    Password
+                    <input type="text" name="password" id="password" maxlength="64">
+                </label>
+
+                <label class="inline-check">
+                    <input type="checkbox" name="send_narodmon" id="send_narodmon">
+                    Send data to narodmon.ru every 5 minutes
+                </label>
+
+                <label>
+                    Measurement Retention (s)
+                    <input type="number" name="measurement_retention_seconds" id="measurement_retention_seconds" min="5" max="600">
+                </label>
+
+                <label>
+                    Max Measurements per Sensor Field
+                    <input type="number" name="measurement_max_count" id="measurement_max_count" min="0" max="1000">
+                </label>
+
+                <div class="button-row">
+                    <button type="submit" name="reboot" value="0">Save</button>
+                    <button type="submit" name="reboot" value="1" class="secondary">Save and Reboot</button>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script>
+        async function loadConfig() {
+            const response = await fetch('/config.json', { cache: 'no-store' });
+            const config = await response.json();
+
+            document.getElementById('mode').value = config.mode || 'ap';
+            document.getElementById('ssid').value = config.ssid || '';
+            document.getElementById('hostname').value = config.hostname || '';
+            document.getElementById('channel').value = config.channel || 3;
+            document.getElementById('security').value = config.security || 'open';
+            document.getElementById('password').value = config.password || '';
+            document.getElementById('send_narodmon').checked = !!config.send_narodmon;
+            document.getElementById('measurement_retention_seconds').value = config.measurement_retention_seconds || 300;
+            document.getElementById('measurement_max_count').value = config.measurement_max_count || 0;
+            document.getElementById('save-status').textContent = config.save_status_valid
+                ? config.save_status
+                : 'Ready';
+        }
+
+        document.getElementById('settings-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const submitter = event.submitter;
+            const form = new FormData(event.target);
+            const params = new URLSearchParams(form);
+            const status = document.getElementById('save-status');
+
+            if (submitter && submitter.name) {
+                params.set(submitter.name, submitter.value);
+            }
+
+            status.textContent = params.get('reboot') === '1' ? 'Saving and rebooting...' : 'Saving...';
+            try {
+                await fetch(`/apply.cgi?${params.toString()}`, { cache: 'no-store' });
+                await loadConfig();
+            } catch (error) {
+                status.textContent = 'Save failed';
+            }
+        });
+
+        App.initHeader();
+        loadConfig().catch(() => {
+            document.getElementById('save-status').textContent = 'Failed to load settings';
+        });
+    </script>
+</body>
+</html>
