@@ -71,6 +71,24 @@
                 </div>
             </form>
         </section>
+
+        <section class="card">
+            <div class="section-title">
+                <h2>Firmware Update</h2>
+            </div>
+            <p class="muted">Current build: <span id="firmware-build">Loading...</span></p>
+            <p id="update-status" class="muted">Select a <code>.ota</code> file.</p>
+            <form id="update-form">
+                <label>
+                    OTA File
+                    <input type="file" id="ota-file" accept=".ota">
+                </label>
+
+                <div class="button-row">
+                    <button type="submit">Update</button>
+                </div>
+            </form>
+        </section>
     </main>
 
     <script src="/app.js"></script>
@@ -88,6 +106,8 @@
             document.getElementById('send_narodmon').checked = !!config.send_narodmon;
             document.getElementById('measurement_retention_seconds').value = config.measurement_retention_seconds || 300;
             document.getElementById('measurement_max_count').value = config.measurement_max_count || 0;
+            document.getElementById('firmware-build').textContent =
+                `#${config.build_number || 0}, ${config.build_datetime || 'unknown'}`;
             document.getElementById('save-status').textContent = config.save_status_valid
                 ? config.save_status
                 : 'Ready';
@@ -111,6 +131,57 @@
                 await loadConfig();
             } catch (error) {
                 status.textContent = 'Save failed';
+            }
+        });
+
+        document.getElementById('update-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const fileInput = document.getElementById('ota-file');
+            const status = document.getElementById('update-status');
+            const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+
+            if (!file) {
+                status.textContent = 'Select a .ota file';
+                return;
+            }
+
+            if (!file.name.toLowerCase().endsWith('.ota')) {
+                status.textContent = 'Invalid file extension';
+                return;
+            }
+
+            status.textContent = 'Uploading firmware...';
+            try {
+                const chunkSize = 4096;
+                for (let offset = 0; offset < file.size; offset += chunkSize) {
+                    const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+                    const response = await fetch(`/update?offset=${offset}&total=${file.size}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/octet-stream'
+                        },
+                        body: chunk,
+                        cache: 'no-store'
+                    });
+                    await response.text();
+
+                    const progress = Math.min(100, Math.floor(((offset + chunk.size) * 100) / file.size));
+                    status.textContent = `Uploading firmware... ${progress}%`;
+
+                    const configResponse = await fetch('/config.json', { cache: 'no-store' });
+                    const config = await configResponse.json();
+                    if (config.save_status_valid && config.save_status.startsWith('Update failed')) {
+                        document.getElementById('save-status').textContent = config.save_status;
+                        status.textContent = config.save_status;
+                        return;
+                    }
+                }
+
+                await loadConfig();
+                status.textContent = document.getElementById('save-status').textContent;
+            } catch (error) {
+                status.textContent = 'Firmware upload failed';
             }
         });
 

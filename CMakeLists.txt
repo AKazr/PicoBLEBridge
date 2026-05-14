@@ -36,12 +36,25 @@ pico_sdk_init()
 
 set(FATFS_SDK_SOURCE_DIR ${PICO_SDK_PATH}/lib/tinyusb/lib/fatfs/source)
 set(FATFS_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/fatfs)
+set(APP_BUILD_INFO_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+set(APP_BUILD_INFO_HEADER ${APP_BUILD_INFO_DIR}/app_build_info.h)
 
 file(MAKE_DIRECTORY ${FATFS_BUILD_DIR})
+file(MAKE_DIRECTORY ${APP_BUILD_INFO_DIR})
 configure_file(${FATFS_SDK_SOURCE_DIR}/ff.c ${FATFS_BUILD_DIR}/ff.c COPYONLY)
 configure_file(${FATFS_SDK_SOURCE_DIR}/ff.h ${FATFS_BUILD_DIR}/ff.h COPYONLY)
 configure_file(${FATFS_SDK_SOURCE_DIR}/diskio.h ${FATFS_BUILD_DIR}/diskio.h COPYONLY)
 configure_file(${CMAKE_CURRENT_LIST_DIR}/ffconf.h ${FATFS_BUILD_DIR}/ffconf.h COPYONLY)
+
+if (NOT EXISTS ${APP_BUILD_INFO_HEADER})
+    file(WRITE ${APP_BUILD_INFO_HEADER}
+            "#ifndef APP_BUILD_INFO_H\n"
+            "#define APP_BUILD_INFO_H\n\n"
+            "#define APP_BUILD_NUMBER 0u\n"
+            "#define APP_BUILD_DATETIME \"not built\"\n\n"
+            "#endif\n"
+    )
+endif()
 
 # Add executable. Default name is the project name, version 0.1
 
@@ -53,11 +66,17 @@ pico_set_program_name(BLEBridgeBootloader "BLEBridgeBootloader")
 pico_set_program_version(BLEBridgeBootloader "0.1")
 pico_enable_stdio_uart(BLEBridgeBootloader 0)
 pico_enable_stdio_usb(BLEBridgeBootloader 0)
+pico_set_linker_script(BLEBridgeBootloader ${CMAKE_CURRENT_LIST_DIR}/bootloader_memmap.ld)
 target_compile_definitions(BLEBridgeBootloader PRIVATE
         APP_IMAGE_BASE=0x10020000u
 )
+target_include_directories(BLEBridgeBootloader PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}
+)
 target_link_libraries(BLEBridgeBootloader
         pico_stdlib
+        hardware_flash
+        hardware_watchdog
         )
 pico_add_extra_outputs(BLEBridgeBootloader)
 
@@ -66,6 +85,7 @@ add_executable(BLEBridge
         dnsserver/dnsserver.c
         BLEBridge.c
         app_config.c
+        app_firmware_update.c
         app_log.c
         app_narodmon.c
         app_runtime_config.c
@@ -85,6 +105,18 @@ add_executable(BLEBridge
 
 pico_set_linker_script(BLEBridge ${CMAKE_CURRENT_LIST_DIR}/memmap_storage.ld)
 
+add_custom_target(generate_app_build_info
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_LIST_DIR}/scripts/generate_build_info.py
+                --build-number-file ${CMAKE_CURRENT_LIST_DIR}/build_number.txt
+                --header ${APP_BUILD_INFO_HEADER}
+        BYPRODUCTS ${APP_BUILD_INFO_HEADER}
+        DEPENDS ${CMAKE_CURRENT_LIST_DIR}/scripts/generate_build_info.py
+        COMMENT "Generating BLEBridge build information"
+        VERBATIM
+)
+add_dependencies(BLEBridge generate_app_build_info)
+
 pico_add_library(pico_httpd_content NOFLAG)
 pico_set_lwip_httpd_content(pico_httpd_content INTERFACE
         ${CMAKE_CURRENT_LIST_DIR}/html/index.html
@@ -96,6 +128,7 @@ pico_set_lwip_httpd_content(pico_httpd_content INTERFACE
         ${CMAKE_CURRENT_LIST_DIR}/html/status.json
         ${CMAKE_CURRENT_LIST_DIR}/html/config.json
         ${CMAKE_CURRENT_LIST_DIR}/html/devices.json
+        ${CMAKE_CURRENT_LIST_DIR}/html/update.txt
 )
 
 pico_set_program_name(BLEBridge "BLEBridge")
@@ -113,10 +146,12 @@ target_link_libraries(BLEBridge
 target_include_directories(BLEBridge PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${FATFS_BUILD_DIR}
+        ${APP_BUILD_INFO_DIR}
 )
 
 # Add any user requested libraries
 target_link_libraries(BLEBridge 
+        hardware_flash
         hardware_watchdog
         hardware_clocks
         pico_cyw43_arch_lwip_poll
@@ -129,5 +164,12 @@ target_link_libraries(BLEBridge
 
 pico_add_extra_outputs(BLEBridge)
 
-
-
+add_custom_command(TARGET BLEBridge POST_BUILD
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_LIST_DIR}/scripts/make_ota_package.py
+                $<TARGET_FILE_DIR:BLEBridge>/BLEBridge.bin
+                $<TARGET_FILE_DIR:BLEBridge>/BLEBridge.ota
+        DEPENDS ${CMAKE_CURRENT_LIST_DIR}/scripts/make_ota_package.py
+        COMMENT "Generating BLEBridge OTA package"
+        VERBATIM
+)

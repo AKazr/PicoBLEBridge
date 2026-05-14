@@ -27,9 +27,9 @@ MEMORY
        124 KB bootloader, 4 KB update metadata,
        896 KB active firmware, 896 KB firmware copy,
        128 KB writable storage. */
-    BOOTLOADER(rx) : ORIGIN = 0x10000000, LENGTH = 124k
+    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 124k
     UPDATE_METADATA(r) : ORIGIN = 0x1001f000, LENGTH = 4k
-    FLASH(rx) : ORIGIN = 0x10020000, LENGTH = 896k
+    ACTIVE_FIRMWARE(r) : ORIGIN = 0x10020000, LENGTH = 896k
     FIRMWARE_COPY(r) : ORIGIN = 0x10100000, LENGTH = 896k
     STORAGE(r) : ORIGIN = 0x101e0000, LENGTH = 128k
 
@@ -46,6 +46,15 @@ SECTIONS
     .flash_begin : {
         __flash_binary_start = .;
     } > FLASH
+
+    .boot2 : {
+        __boot2_start__ = .;
+        KEEP (*(.boot2))
+        __boot2_end__ = .;
+    } > FLASH
+
+    ASSERT(__boot2_end__ - __boot2_start__ == 256,
+        "ERROR: Pico second stage bootloader must be 256 bytes in size")
 
     /* The bootrom will enter the image at the point indicated in your
        IMAGE_DEF, which is usually the reset handler of your vector table.
@@ -109,27 +118,6 @@ SECTIONS
         *(.eh_frame*)
         . = ALIGN(4);
     } > FLASH
-
-    /* Note the boot2 section is optional, and should be discarded if there is
-       no reference to it *inside* the binary, as it is not called by the
-       bootrom. (The bootrom performs a simple best-effort XIP setup and
-       leaves it to the binary to do anything more sophisticated.) However
-       there is still a size limit of 256 bytes, to ensure the boot2 can be
-       stored in boot RAM.
-
-       Really this is a "XIP setup function" -- the name boot2 is historic and
-       refers to its dual-purpose on RP2040, where it also handled vectoring
-       from the bootrom into the user image.
-    */
-
-    .boot2 : {
-        __boot2_start__ = .;
-        *(.boot2)
-        __boot2_end__ = .;
-    } > FLASH
-
-    ASSERT(__boot2_end__ - __boot2_start__ <= 256,
-        "ERROR: Pico second stage bootloader must be no more than 256 bytes in size")
 
     .rodata : {
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .rodata*)
@@ -288,15 +276,15 @@ SECTIONS
         PROVIDE(__storage_size__ = LENGTH(STORAGE));
     } > STORAGE
 
-    PROVIDE(__bootloader_start__ = ORIGIN(BOOTLOADER));
-    PROVIDE(__bootloader_end__ = ORIGIN(BOOTLOADER) + LENGTH(BOOTLOADER));
-    PROVIDE(__bootloader_size__ = LENGTH(BOOTLOADER));
+    PROVIDE(__bootloader_start__ = ORIGIN(FLASH));
+    PROVIDE(__bootloader_end__ = ORIGIN(FLASH) + LENGTH(FLASH));
+    PROVIDE(__bootloader_size__ = LENGTH(FLASH));
     PROVIDE(__update_metadata_start__ = ORIGIN(UPDATE_METADATA));
     PROVIDE(__update_metadata_end__ = ORIGIN(UPDATE_METADATA) + LENGTH(UPDATE_METADATA));
     PROVIDE(__update_metadata_size__ = LENGTH(UPDATE_METADATA));
-    PROVIDE(__firmware_start__ = ORIGIN(FLASH));
-    PROVIDE(__firmware_end__ = ORIGIN(FLASH) + LENGTH(FLASH));
-    PROVIDE(__firmware_size__ = LENGTH(FLASH));
+    PROVIDE(__firmware_start__ = ORIGIN(ACTIVE_FIRMWARE));
+    PROVIDE(__firmware_end__ = ORIGIN(ACTIVE_FIRMWARE) + LENGTH(ACTIVE_FIRMWARE));
+    PROVIDE(__firmware_size__ = LENGTH(ACTIVE_FIRMWARE));
     PROVIDE(__firmware_copy_start__ = ORIGIN(FIRMWARE_COPY));
     PROVIDE(__firmware_copy_end__ = ORIGIN(FIRMWARE_COPY) + LENGTH(FIRMWARE_COPY));
     PROVIDE(__firmware_copy_size__ = LENGTH(FIRMWARE_COPY));

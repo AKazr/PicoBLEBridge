@@ -53,6 +53,8 @@
 #define LWIP_HTTPD                  1
 #define LWIP_HTTPD_SSI              1
 #define LWIP_HTTPD_CGI              1
+#define LWIP_HTTPD_SUPPORT_POST     1
+#define LWIP_HTTPD_MAX_REQ_LENGTH   6144
 #define LWIP_HTTPD_MAX_CGI_PARAMETERS 12
 #define LWIP_TCP_KEEPALIVE          1
 #define LWIP_NETIF_TX_SINGLE_PBUF   1

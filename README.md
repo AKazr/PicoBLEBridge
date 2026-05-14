@@ -19,6 +19,10 @@ RP2040 flash is split into a bootloader area, active firmware, firmware copy are
 3. Re-enter BOOTSEL mode.
 4. Copy `BLEBridge.uf2` to the mounted USB drive.
 
+### OTA flashing
+
+Firmware can be updated through the web interface using the `BLEBridge.ota` file. The firmware is first uploaded to a separate dedicated flash area and is moved to the main firmware area on the next reboot after integrity checks.
+
 ### Default operation
 
 At startup the device detects whether it is connected to a computer or only to a power supply.
@@ -75,7 +79,6 @@ This is especially useful for saving BLE device power: the sensor can transmit m
 ### Notes
 
 - Writable flash storage is small; logs and `config.ini` use the same partition.
-- The bootloader currently is a minimal stub that jumps to the active firmware image.
 - Firmware changes that affect network mode normally require reboot.
 
 ## Русский
@@ -96,6 +99,10 @@ Flash RP2040 разделен на область bootloader, активную �
 2. Скопировать `BLEBridgeBootloader.uf2` на появившийся USB-диск.
 3. Снова войти в режим BOOTSEL.
 4. Скопировать `BLEBridge.uf2` на появившийся USB-диск.
+
+### OTA прошивка
+
+Обновить прошивку можно через web-интерфейс, используя файл `BLEBridge.ota`. Первоначально прошивка загружается в отдельную выделенную область памяти и переносится в основную при следующей перезагрузке после проверки целостности.
 
 ### Работа по умолчанию
 
@@ -153,5 +160,4 @@ Aggregate view и отправка на narodmon используют усред
 ### Примечания
 
 - Writable flash storage небольшой; логи и `config.ini` используют один раздел.
-- Bootloader сейчас является минимальной заглушкой, которая переходит в активный образ прошивки.
 - Изменения прошивки, влияющие на режим сети, обычно требуют перезагрузки.
