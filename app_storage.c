@@ -24,11 +24,11 @@ bool app_storage_init(void)
     fr = f_mount(&app_fs, "0:", 1);
     if (fr == FR_NO_FILESYSTEM) {
         MKFS_PARM mkfs_opt = {
-            /* For the current storage size this selects FAT16, not FAT32. */
-            .fmt = FM_FAT,
+            /* Keep the tiny storage volume unpartitioned: FAT VBR starts at sector 0. */
+            .fmt = FM_FAT | FM_SFD,
             .n_fat = 1,
             .align = 0,
-            .n_root = 0,
+            .n_root = 64,
             .au_size = 0
         };
         static uint8_t work[4096];
