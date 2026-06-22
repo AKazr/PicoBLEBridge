@@ -2,6 +2,7 @@ const App = (() => {
     const navItems = [
         ['dashboard', '/', 'Dashboard'],
         ['ble', '/ble.html', 'BLE Devices'],
+        ['onewire', '/onewire.html', '1-Wire'],
         ['settings', '/settings.html', 'Settings'],
         ['narodmon', '/narodmon.html', 'Narodmon Payload']
     ];
@@ -53,7 +54,8 @@ const App = (() => {
                 ['Flash Free', `${flashFreePercent}% (${(data.flash_free_bytes / 1024).toFixed(1)} KB)`],
                 ['CPU Load', `${data.cpu_load_percent}%`],
                 ['Narodmon Send In', `${data.narodmon_seconds_remaining}s`],
-                ['Device Table', `${((data.device_table_used * 100) / data.device_table_capacity).toFixed(1)}%`],
+                ['BLE Device Table', `${((data.device_table_used * 100) / data.device_table_capacity).toFixed(1)}%`],
+                ['1-Wire Table', `${((data.onewire_device_table_used * 100) / data.onewire_device_table_capacity).toFixed(1)}%`],
                 ['Measurement Buffer', `${((data.measurement_table_used * 100) / data.measurement_table_capacity).toFixed(1)}%`],
                 ['Aggregate View', `${((data.measurement_view_used * 100) / data.measurement_view_capacity).toFixed(1)}%`]
             ];

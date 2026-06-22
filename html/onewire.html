@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BLEBridge 1-Wire Sensors</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body data-page="onewire">
+    <main>
+        <div data-app-header data-title="1-Wire Sensors"></div>
+
+        <section class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>ID</th>
+                        <th>GPIO</th>
+                        <th>ROM</th>
+                        <th>Temperature</th>
+                        <th>Status</th>
+                        <th>Seen Ago (s)</th>
+                        <th>Errors</th>
+                    </tr>
+                </thead>
+                <tbody id="onewire-body">
+                    <tr><td colspan="8" class="muted">Loading...</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script>
+        async function refreshOneWireDevices() {
+            const tableBody = document.getElementById('onewire-body');
+
+            try {
+                const response = await fetch('/onewire.json', { cache: 'no-store' });
+                const data = await response.json();
+
+                if (!data.devices || data.devices.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="8" class="muted">No 1-Wire sensors seen yet</td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = data.devices
+                    .map((device, index) => {
+                        const displayName = device.name ? App.escapeHtml(device.name) : device.id;
+                        const temperature = device.temperature_valid ? `${Number(device.temperature).toFixed(3)} C` : '';
+                        const status = device.present
+                            ? (device.temperature_valid ? 'OK' : 'Read error')
+                            : 'Not seen in last scan';
+
+                        return `<tr>
+                            <td>${index + 1}</td>
+                            <td>${displayName}</td>
+                            <td>GPIO${device.gpio}</td>
+                            <td><code>${App.escapeHtml(device.rom || '')}</code></td>
+                            <td>${temperature}</td>
+                            <td>${status}</td>
+                            <td>${(device.age_ms / 1000).toFixed(1)}</td>
+                            <td>${device.error_count}</td>
+                        </tr>`;
+                    })
+                    .join('');
+            } catch (error) {
+                tableBody.innerHTML = '<tr><td colspan="8" class="muted">Failed to load 1-Wire sensors</td></tr>';
+            }
+        }
+
+        App.initHeader();
+        refreshOneWireDevices();
+        setInterval(refreshOneWireDevices, 1000);
+    </script>
+</body>
+</html>

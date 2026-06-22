@@ -17,6 +17,8 @@
 #include "ble_scanner.h"
 #include "dhcpserver/dhcpserver.h"
 #include "dnsserver/dnsserver.h"
+#include "measurement_store.h"
+#include "onewire_source.h"
 #include "status_led.h"
 
 #define WIFI_CONNECT_TIMEOUT_MS 30000
@@ -269,8 +271,11 @@ static void run_main_application_mode(void)
     cyw43_arch_lwip_end();
 
     app_log("HTTP server is listening on http://%s/", ip4addr_ntoa(netif_ip4_addr(active_netif)));
+    measurement_store_init(to_ms_since_boot(get_absolute_time()));
+    measurement_store_configure(config->measurement_retention_seconds, config->measurement_max_count);
     ble_scanner_init();
     ble_scanner_apply_config(config);
+    onewire_source_apply_config(config);
     next_cpu_update = make_timeout_time_ms(1000);
     next_narodmon_send = make_timeout_time_ms(NARODMON_SEND_INTERVAL_MS);
     app_web_set_narodmon_seconds_remaining(NARODMON_SEND_INTERVAL_MS / 1000u);
@@ -287,6 +292,8 @@ static void run_main_application_mode(void)
         app_narodmon_poll(now_ms);
         app_web_poll(now_ms);
         ble_scanner_periodic(now_ms);
+        onewire_source_periodic(now_ms);
+        measurement_store_periodic(now_ms);
 
         config = app_runtime_config_get();
         if (config->mode == APP_WIFI_MODE_CLIENT && cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA) != CYW43_LINK_UP) {
@@ -360,6 +367,12 @@ int main(void)
     }
 
     status_led_set(true);
+
+    if (!onewire_source_init()) {
+        while (true) {
+            sleep_ms(1000);
+        }
+    }
 
     if (usb_host_present_at_boot()) {
         run_usb_mass_storage_mode();

@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "hardware/flash.h"
-#include "hardware/sync.h"
+#include "pico/flash.h"
 
 #include "app_firmware_update.h"
 #include "app_log.h"
@@ -31,6 +31,23 @@ typedef struct {
 } app_firmware_update_state_t;
 
 static app_firmware_update_state_t app_firmware_update;
+
+typedef struct {
+    bool erase;
+    uint32_t flash_offset;
+    const uint8_t *page;
+} app_firmware_update_flash_operation_t;
+
+static void app_firmware_update_perform_flash_operation(void *context)
+{
+    const app_firmware_update_flash_operation_t *operation = context;
+
+    if (operation->erase) {
+        flash_range_erase(operation->flash_offset, FLASH_SECTOR_SIZE);
+    } else {
+        flash_range_program(operation->flash_offset, operation->page, FLASH_PAGE_SIZE);
+    }
+}
 
 static uint32_t app_firmware_update_flash_offset(const uint8_t *xip_address)
 {
@@ -95,18 +112,30 @@ static void app_firmware_update_fail(app_firmware_update_result_t result)
     app_log("OTA update failed: %s", app_firmware_update_result_text(result));
 }
 
-static void app_firmware_update_flash_program_page(uint32_t flash_offset, const uint8_t *page)
+static bool app_firmware_update_flash_program_page(uint32_t flash_offset, const uint8_t *page)
 {
-    uint32_t ints = save_and_disable_interrupts();
-    flash_range_program(flash_offset, page, FLASH_PAGE_SIZE);
-    restore_interrupts(ints);
+    app_firmware_update_flash_operation_t operation = {
+        .erase = false,
+        .flash_offset = flash_offset,
+        .page = page,
+    };
+
+    return flash_safe_execute(app_firmware_update_perform_flash_operation,
+                              &operation,
+                              UINT32_MAX) == PICO_OK;
 }
 
-static void app_firmware_update_flash_erase_sector(uint32_t flash_offset)
+static bool app_firmware_update_flash_erase_sector(uint32_t flash_offset)
 {
-    uint32_t ints = save_and_disable_interrupts();
-    flash_range_erase(flash_offset, FLASH_SECTOR_SIZE);
-    restore_interrupts(ints);
+    app_firmware_update_flash_operation_t operation = {
+        .erase = true,
+        .flash_offset = flash_offset,
+        .page = NULL,
+    };
+
+    return flash_safe_execute(app_firmware_update_perform_flash_operation,
+                              &operation,
+                              UINT32_MAX) == PICO_OK;
 }
 
 static bool app_firmware_update_write_image_data(const uint8_t *data, uint32_t size)
@@ -131,10 +160,16 @@ static bool app_firmware_update_write_image_data(const uint8_t *data, uint32_t s
         if (app_firmware_update.page_fill == FLASH_PAGE_SIZE) {
             uint32_t page_offset = app_firmware_update.image_received - FLASH_PAGE_SIZE;
             while (app_firmware_update.erased_up_to <= page_offset) {
-                app_firmware_update_flash_erase_sector(copy_start + app_firmware_update.erased_up_to);
+                if (!app_firmware_update_flash_erase_sector(copy_start + app_firmware_update.erased_up_to)) {
+                    app_firmware_update_fail(APP_FIRMWARE_UPDATE_FLASH_ERROR);
+                    return false;
+                }
                 app_firmware_update.erased_up_to += FLASH_SECTOR_SIZE;
             }
-            app_firmware_update_flash_program_page(copy_start + page_offset, app_firmware_update.page);
+            if (!app_firmware_update_flash_program_page(copy_start + page_offset, app_firmware_update.page)) {
+                app_firmware_update_fail(APP_FIRMWARE_UPDATE_FLASH_ERROR);
+                return false;
+            }
             app_firmware_update.page_fill = 0;
             memset(app_firmware_update.page, 0xff, sizeof(app_firmware_update.page));
         }
@@ -143,7 +178,7 @@ static bool app_firmware_update_write_image_data(const uint8_t *data, uint32_t s
     return true;
 }
 
-static void app_firmware_update_finish_write(void)
+static bool app_firmware_update_finish_write(void)
 {
     uint32_t metadata_start = app_firmware_update_flash_offset(&__update_metadata_start__);
 
@@ -153,17 +188,28 @@ static void app_firmware_update_finish_write(void)
         memset(app_firmware_update.page + app_firmware_update.page_fill, 0xff,
                sizeof(app_firmware_update.page) - app_firmware_update.page_fill);
         while (app_firmware_update.erased_up_to <= page_offset) {
-            app_firmware_update_flash_erase_sector(copy_start + app_firmware_update.erased_up_to);
+            if (!app_firmware_update_flash_erase_sector(copy_start + app_firmware_update.erased_up_to)) {
+                return false;
+            }
             app_firmware_update.erased_up_to += FLASH_SECTOR_SIZE;
         }
-        app_firmware_update_flash_program_page(copy_start + page_offset, app_firmware_update.page);
+        if (!app_firmware_update_flash_program_page(copy_start + page_offset, app_firmware_update.page)) {
+            return false;
+        }
         app_firmware_update.page_fill = 0;
     }
 
-    app_firmware_update_flash_erase_sector(metadata_start);
-    for (uint32_t offset = 0; offset < APP_FIRMWARE_UPDATE_HEADER_SIZE; offset += FLASH_PAGE_SIZE) {
-        app_firmware_update_flash_program_page(metadata_start + offset, app_firmware_update.header + offset);
+    if (!app_firmware_update_flash_erase_sector(metadata_start)) {
+        return false;
     }
+    for (uint32_t offset = 0; offset < APP_FIRMWARE_UPDATE_HEADER_SIZE; offset += FLASH_PAGE_SIZE) {
+        if (!app_firmware_update_flash_program_page(metadata_start + offset,
+                                                    app_firmware_update.header + offset)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 app_firmware_update_result_t app_firmware_update_begin(uint32_t content_len)
@@ -234,8 +280,11 @@ app_firmware_update_result_t app_firmware_update_finish(void)
             app_firmware_update.image_received != app_firmware_update.image_size) {
             app_firmware_update_fail(APP_FIRMWARE_UPDATE_INCOMPLETE);
         } else {
-            app_firmware_update_finish_write();
-            app_log("OTA update uploaded: image=%lu bytes", (unsigned long)app_firmware_update.image_size);
+            if (!app_firmware_update_finish_write()) {
+                app_firmware_update_fail(APP_FIRMWARE_UPDATE_FLASH_ERROR);
+            } else {
+                app_log("OTA update uploaded: image=%lu bytes", (unsigned long)app_firmware_update.image_size);
+            }
         }
     }
 
@@ -283,6 +332,8 @@ const char *app_firmware_update_result_text(app_firmware_update_result_t result)
         return "Update failed: incomplete OTA upload";
     case APP_FIRMWARE_UPDATE_INVALID_OFFSET:
         return "Update failed: unexpected OTA chunk offset";
+    case APP_FIRMWARE_UPDATE_FLASH_ERROR:
+        return "Update failed: flash write error";
     case APP_FIRMWARE_UPDATE_NOT_ACTIVE:
     default:
         return "Update failed: OTA upload is not active";

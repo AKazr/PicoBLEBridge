@@ -1,7 +1,7 @@
 #include <string.h>
 
 #include "hardware/flash.h"
-#include "hardware/sync.h"
+#include "pico/flash.h"
 #include "pico/stdlib.h"
 
 #include "storage_backend.h"
@@ -10,6 +10,22 @@ extern const uint8_t __storage_start__;
 extern const uint8_t __storage_end__;
 
 static uint8_t sector_buffer[FLASH_SECTOR_SIZE];
+
+typedef struct {
+    uint32_t flash_offset;
+} storage_backend_flash_operation_t;
+
+static void storage_backend_program_sector(void *context)
+{
+    const storage_backend_flash_operation_t *operation = context;
+
+    flash_range_erase(operation->flash_offset, FLASH_SECTOR_SIZE);
+    for (uint32_t page_offset = 0; page_offset < FLASH_SECTOR_SIZE; page_offset += FLASH_PAGE_SIZE) {
+        flash_range_program(operation->flash_offset + page_offset,
+                            sector_buffer + page_offset,
+                            FLASH_PAGE_SIZE);
+    }
+}
 
 static uint32_t storage_backend_offset_bytes(void)
 {
@@ -79,12 +95,13 @@ bool storage_backend_write(uint32_t byte_offset, const void *buffer, uint32_t si
         memcpy(sector_buffer, sector_xip, FLASH_SECTOR_SIZE);
         memcpy(sector_buffer + sector_offset, data, chunk_size);
 
-        uint32_t ints = save_and_disable_interrupts();
-        flash_range_erase(sector_flash_offset, FLASH_SECTOR_SIZE);
-        for (uint32_t page_offset = 0; page_offset < FLASH_SECTOR_SIZE; page_offset += FLASH_PAGE_SIZE) {
-            flash_range_program(sector_flash_offset + page_offset, sector_buffer + page_offset, FLASH_PAGE_SIZE);
+        storage_backend_flash_operation_t operation = {
+            .flash_offset = sector_flash_offset,
+        };
+
+        if (flash_safe_execute(storage_backend_program_sector, &operation, UINT32_MAX) != PICO_OK) {
+            return false;
         }
-        restore_interrupts(ints);
 
         byte_offset += chunk_size;
         data += chunk_size;

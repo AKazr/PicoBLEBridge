@@ -12,6 +12,7 @@ typedef enum {
     APP_FIRMWARE_UPDATE_INCOMPLETE,
     APP_FIRMWARE_UPDATE_NOT_ACTIVE,
     APP_FIRMWARE_UPDATE_INVALID_OFFSET,
+    APP_FIRMWARE_UPDATE_FLASH_ERROR,
 } app_firmware_update_result_t;
 
 app_firmware_update_result_t app_firmware_update_begin(uint32_t content_len);

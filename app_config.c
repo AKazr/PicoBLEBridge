@@ -24,6 +24,9 @@ static void app_config_defaults(app_config_t *config)
     config->security = APP_WIFI_SECURITY_OPEN;
     config->measurement_retention_seconds = APP_CONFIG_MEASUREMENT_RETENTION_DEFAULT_SECONDS;
     config->measurement_max_count = APP_CONFIG_MEASUREMENT_MAX_COUNT_DEFAULT;
+    config->onewire_poll_interval_seconds = APP_CONFIG_ONEWIRE_POLL_INTERVAL_DEFAULT_SECONDS;
+    config->onewire_gpio2_enabled = true;
+    config->onewire_gpio3_enabled = true;
 }
 
 bool app_config_normalize_mac(char *normalized_mac, size_t normalized_mac_size, const char *input)
@@ -333,6 +336,12 @@ void app_config_normalize(app_config_t *config)
     if (config->measurement_max_count > APP_CONFIG_MEASUREMENT_MAX_COUNT_MAX) {
         config->measurement_max_count = APP_CONFIG_MEASUREMENT_MAX_COUNT_MAX;
     }
+    if (config->onewire_poll_interval_seconds < APP_CONFIG_ONEWIRE_POLL_INTERVAL_MIN_SECONDS) {
+        config->onewire_poll_interval_seconds = APP_CONFIG_ONEWIRE_POLL_INTERVAL_MIN_SECONDS;
+    }
+    if (config->onewire_poll_interval_seconds > APP_CONFIG_ONEWIRE_POLL_INTERVAL_MAX_SECONDS) {
+        config->onewire_poll_interval_seconds = APP_CONFIG_ONEWIRE_POLL_INTERVAL_MAX_SECONDS;
+    }
 
     if (config->allowed_mac_count > APP_CONFIG_ALLOWED_MAC_MAX_COUNT) {
         config->allowed_mac_count = APP_CONFIG_ALLOWED_MAC_MAX_COUNT;
@@ -396,6 +405,16 @@ bool app_config_load(app_config_t *config)
         } else {
             config->measurement_max_count = max_count > 0 ? (uint16_t)max_count : 0;
         }
+    }
+    {
+        long poll_interval_seconds = ini_getl("onewire",
+                                              "poll_interval_seconds",
+                                              (long)config->onewire_poll_interval_seconds,
+                                              APP_CONFIG_PATH);
+
+        config->onewire_poll_interval_seconds = poll_interval_seconds > 0 ? (uint32_t)poll_interval_seconds : 0;
+        config->onewire_gpio2_enabled = ini_getl("onewire", "gpio2_enabled", 1, APP_CONFIG_PATH) != 0;
+        config->onewire_gpio3_enabled = ini_getl("onewire", "gpio3_enabled", 1, APP_CONFIG_PATH) != 0;
     }
 
     config->allowed_mac_count = 0;
@@ -483,6 +502,8 @@ bool app_config_save(const app_config_t *config)
                                "; send_narodmon: 0 | 1\n"
                                "; retention_seconds: measurement storage time, 5..600\n"
                                "; max_count: max measurements per device/field pair, 0..1000; 0 means unlimited\n"
+                               "; poll_interval_seconds: 1-Wire DS18B20 polling interval, 5..300\n"
+                               "; gpio2_enabled/gpio3_enabled: 0 | 1, enable the corresponding 1-Wire bus\n"
                                "; macN: BLE MAC address without separators, enables device processing\n"
                                "; [names] stores idN/nameN pairs for user-visible sensor names.\n"
                                "; In client mode, the device connects to an existing Wi-Fi network.\n"
@@ -525,6 +546,19 @@ bool app_config_save(const app_config_t *config)
                                "max_count=%u\n",
                                (unsigned long)config->measurement_retention_seconds,
                                (unsigned)config->measurement_max_count)) {
+        f_close(&file);
+        return false;
+    }
+
+    if (!app_config_write_line(&file,
+                               "\n"
+                               "[onewire]\n"
+                               "poll_interval_seconds=%lu\n"
+                               "gpio2_enabled=%d\n"
+                               "gpio3_enabled=%d\n",
+                               (unsigned long)config->onewire_poll_interval_seconds,
+                               config->onewire_gpio2_enabled ? 1 : 0,
+                               config->onewire_gpio3_enabled ? 1 : 0)) {
         f_close(&file);
         return false;
     }

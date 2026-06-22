@@ -95,6 +95,9 @@ add_executable(BLEBridge
         ble_scanner.c
         measurement_store.c
         minIni.c
+        onewire_bus.c
+        onewire_source.c
+        onewire_worker.c
         fatfs_diskio.c
         status_led.c
         storage_backend.c
@@ -121,6 +124,7 @@ pico_add_library(pico_httpd_content NOFLAG)
 pico_set_lwip_httpd_content(pico_httpd_content INTERFACE
         ${CMAKE_CURRENT_LIST_DIR}/html/index.html
         ${CMAKE_CURRENT_LIST_DIR}/html/ble.html
+        ${CMAKE_CURRENT_LIST_DIR}/html/onewire.html
         ${CMAKE_CURRENT_LIST_DIR}/html/settings.html
         ${CMAKE_CURRENT_LIST_DIR}/html/narodmon.html
         ${CMAKE_CURRENT_LIST_DIR}/html/style.css
@@ -128,6 +132,7 @@ pico_set_lwip_httpd_content(pico_httpd_content INTERFACE
         ${CMAKE_CURRENT_LIST_DIR}/html/status.json
         ${CMAKE_CURRENT_LIST_DIR}/html/config.json
         ${CMAKE_CURRENT_LIST_DIR}/html/devices.json
+        ${CMAKE_CURRENT_LIST_DIR}/html/onewire.json
         ${CMAKE_CURRENT_LIST_DIR}/html/update.txt
 )
 
@@ -154,6 +159,8 @@ target_link_libraries(BLEBridge
         hardware_flash
         hardware_watchdog
         hardware_clocks
+        pico_flash
+        pico_multicore
         pico_cyw43_arch_lwip_poll
         pico_lwip_http
         pico_httpd_content

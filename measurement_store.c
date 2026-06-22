@@ -65,6 +65,8 @@ static const char *measurement_field_name(uint8_t field_type)
         return "battery";
     case MEASUREMENT_FIELD_TEMPERATURE:
         return "temperature";
+    case MEASUREMENT_FIELD_1WIRE_TEMPERATURE:
+        return "1wire_temperature";
     case MEASUREMENT_FIELD_HUMIDITY:
         return "humidity";
     case MEASUREMENT_FIELD_NONE:
@@ -319,25 +321,6 @@ bool measurement_store_add(uint32_t device_id, measurement_field_t field_type, f
     return true;
 }
 
-void measurement_store_filter(measurement_store_device_allowed_fn is_allowed, void *context)
-{
-    if (is_allowed == NULL) {
-        return;
-    }
-
-    for (int i = 0; i < MEASUREMENT_STORE_TABLE_SIZE; ++i) {
-        if (measurement_table[i].field_type == MEASUREMENT_FIELD_NONE) {
-            continue;
-        }
-
-        if (!is_allowed(measurement_table[i].device_id, context)) {
-            measurement_table[i].field_type = MEASUREMENT_FIELD_NONE;
-        }
-    }
-
-    measurement_view_rebuild();
-}
-
 u16_t measurement_store_write_json(char *insert, int insert_len)
 {
     int written = 0;
@@ -422,6 +405,7 @@ int measurement_store_build_narodmon_payload(char *insert, int insert_len, uint3
 
         switch ((measurement_field_t)entry->field_type) {
         case MEASUREMENT_FIELD_TEMPERATURE:
+        case MEASUREMENT_FIELD_1WIRE_TEMPERATURE:
             metric_prefix = "TEMP";
             break;
         case MEASUREMENT_FIELD_HUMIDITY:

@@ -65,6 +65,21 @@
                     <input type="number" name="measurement_max_count" id="measurement_max_count" min="0" max="1000">
                 </label>
 
+                <label>
+                    1-Wire Poll Interval (s)
+                    <input type="number" name="onewire_poll_interval_seconds" id="onewire_poll_interval_seconds" min="5" max="300">
+                </label>
+
+                <label class="inline-check">
+                    <input type="checkbox" name="onewire_gpio2_enabled" id="onewire_gpio2_enabled">
+                    Poll 1-Wire sensors on GPIO2
+                </label>
+
+                <label class="inline-check">
+                    <input type="checkbox" name="onewire_gpio3_enabled" id="onewire_gpio3_enabled">
+                    Poll 1-Wire sensors on GPIO3
+                </label>
+
                 <div class="button-row">
                     <button type="submit" name="reboot" value="0">Save</button>
                     <button type="submit" name="reboot" value="1" class="secondary">Save and Reboot</button>
@@ -106,6 +121,9 @@
             document.getElementById('send_narodmon').checked = !!config.send_narodmon;
             document.getElementById('measurement_retention_seconds').value = config.measurement_retention_seconds || 300;
             document.getElementById('measurement_max_count').value = config.measurement_max_count || 0;
+            document.getElementById('onewire_poll_interval_seconds').value = config.onewire_poll_interval_seconds || 30;
+            document.getElementById('onewire_gpio2_enabled').checked = !!config.onewire_gpio2_enabled;
+            document.getElementById('onewire_gpio3_enabled').checked = !!config.onewire_gpio3_enabled;
             document.getElementById('firmware-build').textContent =
                 `#${config.build_number || 0}, ${config.build_datetime || 'unknown'}`;
             document.getElementById('save-status').textContent = config.save_status_valid

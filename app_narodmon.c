@@ -12,7 +12,7 @@
 #include "app_config.h"
 #include "app_narodmon.h"
 #include "app_runtime_config.h"
-#include "ble_scanner.h"
+#include "measurement_store.h"
 
 #define APP_NARODMON_HOST "narodmon.ru"
 #define APP_NARODMON_PORT 8283
@@ -145,7 +145,7 @@ int app_narodmon_build_payload(char *buffer, int buffer_len)
         return -1;
     }
 
-    metric_length = ble_scanner_build_narodmon_payload(buffer + written, buffer_len - written, uptime_seconds);
+    metric_length = measurement_store_build_narodmon_payload(buffer + written, buffer_len - written, uptime_seconds);
     if (metric_length <= 0) {
         return metric_length;
     }
@@ -298,11 +298,11 @@ bool app_narodmon_start_send(void)
 
     written = app_narodmon_build_payload(app_narodmon_state.payload, (int)sizeof(app_narodmon_state.payload));
     if (written < 0) {
-        app_log("Narodmon send skipped: unable to get Wi-Fi MAC");
+        app_log("Narodmon send skipped: unable to build payload");
         return false;
     }
     if (written == 0) {
-        app_log("Narodmon send skipped: no selected BLE measurements");
+        app_log("Narodmon send skipped: no measurements");
         return false;
     }
 

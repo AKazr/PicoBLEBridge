@@ -18,6 +18,9 @@
 #define APP_CONFIG_MEASUREMENT_RETENTION_DEFAULT_SECONDS 300u
 #define APP_CONFIG_MEASUREMENT_MAX_COUNT_MAX 1000u
 #define APP_CONFIG_MEASUREMENT_MAX_COUNT_DEFAULT 0u
+#define APP_CONFIG_ONEWIRE_POLL_INTERVAL_MIN_SECONDS 5u
+#define APP_CONFIG_ONEWIRE_POLL_INTERVAL_MAX_SECONDS 300u
+#define APP_CONFIG_ONEWIRE_POLL_INTERVAL_DEFAULT_SECONDS 30u
 
 typedef struct {
     uint32_t device_id;
@@ -44,6 +47,9 @@ typedef struct {
     bool send_narodmon;
     uint32_t measurement_retention_seconds;
     uint16_t measurement_max_count;
+    uint32_t onewire_poll_interval_seconds;
+    bool onewire_gpio2_enabled;
+    bool onewire_gpio3_enabled;
     char allowed_macs[APP_CONFIG_ALLOWED_MAC_MAX_COUNT][APP_CONFIG_ALLOWED_MAC_LEN];
     uint16_t allowed_mac_count;
     app_config_device_name_t device_names[APP_CONFIG_DEVICE_NAME_MAX_COUNT];

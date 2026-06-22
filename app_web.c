@@ -17,6 +17,8 @@
 #include "app_text.h"
 #include "app_web.h"
 #include "ble_scanner.h"
+#include "measurement_store.h"
+#include "onewire_source.h"
 
 #define APP_WEB_SAVE_STATUS_MAX_LEN 96
 #define APP_WEB_REBOOT_DELAY_MS 1000u
@@ -46,6 +48,7 @@ const char *app_web_ssi_tags[] = {
     "stat",
     "cfg",
     "nmon",
+    "owire",
 };
 
 const size_t app_web_ssi_tag_count = sizeof(app_web_ssi_tags) / sizeof(app_web_ssi_tags[0]);
@@ -118,7 +121,9 @@ static void app_web_update_request_fail(app_firmware_update_result_t result)
 static void app_web_apply_config(const app_config_t *config)
 {
     app_runtime_config_set(config);
+    measurement_store_configure(config->measurement_retention_seconds, config->measurement_max_count);
     ble_scanner_apply_config(app_runtime_config_get());
+    onewire_source_apply_config(app_runtime_config_get());
 }
 
 static const char *app_web_find_param_value(int count, char *params[], char *values[], const char *name)
@@ -155,7 +160,9 @@ static u16_t app_web_write_status_json(char *insert, int insert_len)
                        "\"measurement_table_used\":%d,"
                        "\"measurement_table_capacity\":%d,"
                        "\"measurement_view_used\":%d,"
-                       "\"measurement_view_capacity\":%d}",
+                       "\"measurement_view_capacity\":%d,"
+                       "\"onewire_device_table_used\":%d,"
+                       "\"onewire_device_table_capacity\":%d}",
                        (unsigned long long)total_bytes,
                        (unsigned long long)free_bytes,
                        app_web_cpu_load_percent,
@@ -167,7 +174,9 @@ static u16_t app_web_write_status_json(char *insert, int insert_len)
                        ble_scanner_measurement_table_used(),
                        ble_scanner_measurement_table_capacity(),
                        ble_scanner_measurement_view_used(),
-                       ble_scanner_measurement_view_capacity());
+                       ble_scanner_measurement_view_capacity(),
+                       onewire_source_device_table_used(),
+                       onewire_source_device_table_capacity());
 
     if (written < 0) {
         return 0;
@@ -211,6 +220,9 @@ static u16_t app_web_write_config_json(char *insert, int insert_len)
                        "\"send_narodmon\":%s,"
                        "\"measurement_retention_seconds\":%lu,"
                        "\"measurement_max_count\":%u,"
+                       "\"onewire_poll_interval_seconds\":%lu,"
+                       "\"onewire_gpio2_enabled\":%s,"
+                       "\"onewire_gpio3_enabled\":%s,"
                        "\"build_number\":%lu,"
                        "\"build_datetime\":\"%s\","
                        "\"save_status_valid\":%s,"
@@ -224,6 +236,9 @@ static u16_t app_web_write_config_json(char *insert, int insert_len)
                        config->send_narodmon ? "true" : "false",
                        (unsigned long)config->measurement_retention_seconds,
                        (unsigned)config->measurement_max_count,
+                       (unsigned long)config->onewire_poll_interval_seconds,
+                       config->onewire_gpio2_enabled ? "true" : "false",
+                       config->onewire_gpio3_enabled ? "true" : "false",
                        (unsigned long)APP_BUILD_NUMBER,
                        build_datetime,
                        app_web_save_status_valid ? "true" : "false",
@@ -336,6 +351,24 @@ static const char *app_web_cgi_settings_handler(int iIndex, int iNumParams, char
         }
         app_web_next_config.measurement_max_count = (uint16_t)max_count;
     }
+
+    value = app_web_find_param_value(iNumParams, pcParam, pcValue, "onewire_poll_interval_seconds");
+    if (value != NULL) {
+        char poll_interval_value[16];
+        unsigned long poll_interval_seconds;
+        snprintf(poll_interval_value, sizeof(poll_interval_value), "%s", value);
+        app_text_url_decode(poll_interval_value);
+        poll_interval_seconds = strtoul(poll_interval_value, NULL, 10);
+        if (poll_interval_seconds > APP_CONFIG_ONEWIRE_POLL_INTERVAL_MAX_SECONDS) {
+            poll_interval_seconds = APP_CONFIG_ONEWIRE_POLL_INTERVAL_MAX_SECONDS;
+        }
+        app_web_next_config.onewire_poll_interval_seconds = (uint32_t)poll_interval_seconds;
+    }
+
+    value = app_web_find_param_value(iNumParams, pcParam, pcValue, "onewire_gpio2_enabled");
+    app_web_next_config.onewire_gpio2_enabled = value != NULL;
+    value = app_web_find_param_value(iNumParams, pcParam, pcValue, "onewire_gpio3_enabled");
+    app_web_next_config.onewire_gpio3_enabled = value != NULL;
 
     app_config_normalize(&app_web_next_config);
 
@@ -503,6 +536,8 @@ u16_t app_web_ssi_handler(int index, char *insert, int insert_len)
         return app_web_write_config_json(insert, insert_len);
     case 4:
         return app_web_write_narodmon_text(insert, insert_len);
+    case 5:
+        return onewire_source_write_devices_json(insert, insert_len);
     default:
         return 0;
     }

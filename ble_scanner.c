@@ -426,8 +426,6 @@ void ble_scanner_periodic(uint32_t now_ms)
     for (int i = write_index; i < BLE_DEVICE_TABLE_SIZE; ++i) {
         memset(&ble_device_table[i], 0, sizeof(ble_device_table[i]));
     }
-
-    measurement_store_periodic(now_ms);
 }
 
 int ble_scanner_device_count(void)
@@ -443,21 +441,6 @@ int ble_scanner_device_count(void)
     return count;
 }
 
-static bool ble_device_id_is_selected(uint32_t device_id, void *context)
-{
-    (void)context;
-
-    for (int i = 0; i < BLE_DEVICE_TABLE_SIZE; ++i) {
-        if (ble_device_table[i].in_use &&
-            ble_device_table[i].device_id == device_id &&
-            ble_device_table[i].selected) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 void ble_scanner_apply_config(const app_config_t *config)
 {
     ble_allowed_mac_count = 0;
@@ -470,8 +453,6 @@ void ble_scanner_apply_config(const app_config_t *config)
                      config->allowed_macs[i]);
             ++ble_allowed_mac_count;
         }
-
-        measurement_store_configure(config->measurement_retention_seconds, config->measurement_max_count);
     }
 
     for (int i = 0; i < BLE_DEVICE_TABLE_SIZE; ++i) {
@@ -502,8 +483,6 @@ void ble_scanner_apply_config(const app_config_t *config)
             }
         }
     }
-
-    measurement_store_filter(ble_device_id_is_selected, NULL);
 }
 
 void ble_scanner_init(void)
@@ -511,7 +490,6 @@ void ble_scanner_init(void)
     memset(ble_device_table, 0, sizeof(ble_device_table));
     memset(ble_allowed_macs, 0, sizeof(ble_allowed_macs));
     ble_allowed_mac_count = 0;
-    measurement_store_init(to_ms_since_boot(get_absolute_time()));
     ble_hci_event_callback_registration.callback = &ble_packet_handler;
     hci_add_event_handler(&ble_hci_event_callback_registration);
     hci_power_control(HCI_POWER_ON);
@@ -624,11 +602,6 @@ u16_t ble_scanner_write_devices_json(char *insert, int insert_len)
 u16_t ble_scanner_write_measurements_json(char *insert, int insert_len)
 {
     return measurement_store_write_json(insert, insert_len);
-}
-
-int ble_scanner_build_narodmon_payload(char *insert, int insert_len, uint32_t uptime_seconds)
-{
-    return measurement_store_build_narodmon_payload(insert, insert_len, uptime_seconds);
 }
 
 int ble_scanner_device_table_used(void)
