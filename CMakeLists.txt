@@ -127,6 +127,7 @@ pico_set_lwip_httpd_content(pico_httpd_content INTERFACE
         ${CMAKE_CURRENT_LIST_DIR}/html/onewire.html
         ${CMAKE_CURRENT_LIST_DIR}/html/settings.html
         ${CMAKE_CURRENT_LIST_DIR}/html/narodmon.html
+        ${CMAKE_CURRENT_LIST_DIR}/html/narodmon.ssi
         ${CMAKE_CURRENT_LIST_DIR}/html/style.css
         ${CMAKE_CURRENT_LIST_DIR}/html/app.js
         ${CMAKE_CURRENT_LIST_DIR}/html/status.json

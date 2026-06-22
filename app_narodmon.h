@@ -6,8 +6,9 @@
 #include <stddef.h>
 
 #define APP_NARODMON_PAYLOAD_MAX_LEN 4096
+#define APP_NARODMON_DEVICE_ID_LEN 17
 
-bool app_narodmon_get_device_name(char *buffer, size_t buffer_len);
+bool app_narodmon_get_device_id(char *buffer, size_t buffer_len);
 int app_narodmon_build_payload(char *buffer, int buffer_len);
 bool app_narodmon_start_send(void);
 void app_narodmon_poll(uint32_t now_ms);

@@ -6,12 +6,11 @@
 #include "lwip/ip_addr.h"
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
+#include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 
 #include "app_log.h"
-#include "app_config.h"
 #include "app_narodmon.h"
-#include "app_runtime_config.h"
 #include "measurement_store.h"
 
 #define APP_NARODMON_HOST "narodmon.ru"
@@ -102,27 +101,33 @@ static err_t app_narodmon_recv_cb(void *arg, struct tcp_pcb *tpcb, struct pbuf *
 static err_t app_narodmon_poll_cb(void *arg, struct tcp_pcb *tpcb);
 static void app_narodmon_err_cb(void *arg, err_t err);
 
-bool app_narodmon_get_device_name(char *buffer, size_t buffer_len)
+bool app_narodmon_get_device_id(char *buffer, size_t buffer_len)
 {
-    const char *device_name = app_runtime_config_get_device_name();
+    uint8_t mac[6];
+    int written;
 
-    if (buffer == NULL || buffer_len == 0) {
+    if (buffer == NULL || buffer_len < APP_NARODMON_DEVICE_ID_LEN ||
+        cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, mac) != 0) {
         return false;
     }
 
-    return snprintf(buffer, buffer_len, "%s", device_name) < (int)buffer_len;
+    written = snprintf(buffer,
+                       buffer_len,
+                       "BLEB%02X%02X%02X%02X%02X%02X",
+                       mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    return written == (APP_NARODMON_DEVICE_ID_LEN - 1);
 }
 
 static bool app_narodmon_write_header(char *payload, size_t payload_size, int *written)
 {
-    char device_name[APP_CONFIG_HOSTNAME_MAX_LEN];
+    char device_id[APP_NARODMON_DEVICE_ID_LEN];
     int result;
 
-    if (!app_narodmon_get_device_name(device_name, sizeof(device_name))) {
+    if (!app_narodmon_get_device_id(device_id, sizeof(device_id))) {
         return false;
     }
 
-    result = snprintf(payload, payload_size, "#%s\n", device_name);
+    result = snprintf(payload, payload_size, "#%s\n", device_id);
     if (result < 0 || result >= (int)payload_size) {
         return false;
     }

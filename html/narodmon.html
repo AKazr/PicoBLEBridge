@@ -11,13 +11,29 @@
         <div data-app-header data-title="Narodmon Payload"></div>
 
         <section class="card">
-            <pre class="payload-view"><!--#nmon--></pre>
+            <pre id="narodmon-payload" class="payload-view">Loading...</pre>
         </section>
     </main>
 
     <script src="/app.js"></script>
     <script>
+        async function loadNarodmonPayload() {
+            const payload = document.getElementById('narodmon-payload');
+
+            try {
+                const response = await fetch('/narodmon.ssi', { cache: 'no-store' });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const text = await response.text();
+                payload.textContent = text.endsWith('\n') ? text.slice(0, -1) : text;
+            } catch (error) {
+                payload.textContent = 'Failed to load Narodmon payload';
+            }
+        }
+
         App.initHeader();
+        loadNarodmonPayload();
     </script>
 </body>
 </html>

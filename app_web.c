@@ -201,6 +201,7 @@ static u16_t app_web_write_config_json(char *insert, int insert_len)
     char password[APP_CONFIG_PASSWORD_MAX_LEN * 2];
     char save_status[APP_WEB_SAVE_STATUS_MAX_LEN * 2];
     char build_datetime[64];
+    char narodmon_device_id[APP_NARODMON_DEVICE_ID_LEN];
     int written;
 
     app_text_json_escape(ssid, sizeof(ssid), config->ssid);
@@ -208,6 +209,9 @@ static u16_t app_web_write_config_json(char *insert, int insert_len)
     app_text_json_escape(password, sizeof(password), config->password);
     app_text_json_escape(save_status, sizeof(save_status), app_web_save_status_valid ? app_web_save_status : "");
     app_text_json_escape(build_datetime, sizeof(build_datetime), APP_BUILD_DATETIME);
+    if (!app_narodmon_get_device_id(narodmon_device_id, sizeof(narodmon_device_id))) {
+        narodmon_device_id[0] = '\0';
+    }
 
     written = snprintf(insert,
                        insert_len,
@@ -218,6 +222,7 @@ static u16_t app_web_write_config_json(char *insert, int insert_len)
                        "\"security\":\"%s\","
                        "\"password\":\"%s\","
                        "\"send_narodmon\":%s,"
+                       "\"narodmon_device_id\":\"%s\","
                        "\"measurement_retention_seconds\":%lu,"
                        "\"measurement_max_count\":%u,"
                        "\"onewire_poll_interval_seconds\":%lu,"
@@ -234,6 +239,7 @@ static u16_t app_web_write_config_json(char *insert, int insert_len)
                        app_config_security_name(config->security),
                        password,
                        config->send_narodmon ? "true" : "false",
+                       narodmon_device_id,
                        (unsigned long)config->measurement_retention_seconds,
                        (unsigned)config->measurement_max_count,
                        (unsigned long)config->onewire_poll_interval_seconds,

@@ -52,7 +52,7 @@
 
                 <label class="inline-check">
                     <input type="checkbox" name="send_narodmon" id="send_narodmon">
-                    Send data to narodmon.ru every 5 minutes
+                    <span>Send data to narodmon.ru every 5 minutes (MAC:<span id="narodmon-device-id">loading...</span>)</span>
                 </label>
 
                 <label>
@@ -119,6 +119,7 @@
             document.getElementById('security').value = config.security || 'open';
             document.getElementById('password').value = config.password || '';
             document.getElementById('send_narodmon').checked = !!config.send_narodmon;
+            document.getElementById('narodmon-device-id').textContent = config.narodmon_device_id || 'unknown';
             document.getElementById('measurement_retention_seconds').value = config.measurement_retention_seconds || 300;
             document.getElementById('measurement_max_count').value = config.measurement_max_count || 0;
             document.getElementById('onewire_poll_interval_seconds').value = config.onewire_poll_interval_seconds || 30;
