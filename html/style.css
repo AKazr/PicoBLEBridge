@@ -173,6 +173,25 @@ button.secondary {
     word-break: break-word;
 }
 
+.log-actions {
+    margin-bottom: 12px;
+}
+
+.log-actions button {
+    width: auto;
+}
+
+.log-view {
+    max-height: 70vh;
+    padding: 12px;
+    margin: 0;
+    overflow: auto;
+    border-radius: 6px;
+    background: #0f172a;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .muted {
     color: #94a3b8;
 }

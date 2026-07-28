@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "ff.h"
+#include "pico/stdlib.h"
 
 #include "app_storage.h"
 #include "app_log.h"
@@ -88,13 +89,26 @@ void app_log(const char *fmt, ...)
     UINT written;
     va_list args;
     bool led_was_on;
+    uint32_t uptime_ms;
+    int prefix_len;
+    size_t message_offset;
 
     if (!log_ready) {
         return;
     }
 
+    uptime_ms = to_ms_since_boot(get_absolute_time());
+    prefix_len = snprintf(line,
+                          sizeof(line),
+                          "[%lu.%03lu] ",
+                          (unsigned long)(uptime_ms / 1000u),
+                          (unsigned long)(uptime_ms % 1000u));
+    message_offset = (prefix_len > 0 && (size_t)prefix_len < sizeof(line))
+                         ? (size_t)prefix_len
+                         : 0u;
+
     va_start(args, fmt);
-    vsnprintf(line, sizeof(line), fmt, args);
+    vsnprintf(line + message_offset, sizeof(line) - message_offset, fmt, args);
     va_end(args);
 
     size_t len = strlen(line);
@@ -106,11 +120,11 @@ void app_log(const char *fmt, ...)
     line[len++] = '\n';
     line[len] = '\0';
 
-    led_was_on = status_led_suspend_off();
+    //led_was_on = status_led_suspend_off();
     if (app_log_rotate_if_needed(len) &&
         f_write(&log_file, line, len, &written) == FR_OK &&
         written == len) {
         f_sync(&log_file);
     }
-    status_led_resume(led_was_on);
+   // status_led_resume(led_was_on);
 }

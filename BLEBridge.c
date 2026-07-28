@@ -22,12 +22,12 @@
 #include "status_led.h"
 
 #define WIFI_CONNECT_TIMEOUT_MS 30000
-#define IP_ACQUIRE_TIMEOUT_MS 15000
 #define NARODMON_SEND_INTERVAL_MS (5u * 60u * 1000u)
 #define POLL_INTERVAL_MS 50
 #define USB_HOST_DETECT_TIMEOUT_MS 1500
 #define WIFI_CONNECT_LED_BLINK_MS 100
 #define REBOOT_DELAY_MS 1000
+#define WATCHDOG_TIMEOUT_MS 8388
 
 static const char *firmware_build_version = __DATE__ " " __TIME__;
 
@@ -60,6 +60,7 @@ static bool usb_host_present_at_boot(void)
     }
 
     while (!time_reached(deadline)) {
+        watchdog_update();
         tud_task();
         cyw43_arch_poll();
 
@@ -79,6 +80,7 @@ static void run_usb_mass_storage_mode(void)
     status_led_set(false);
 
     while (true) {
+        watchdog_update();
         tud_task();
         cyw43_arch_poll();
         sleep_ms(1);
@@ -90,20 +92,26 @@ static uint32_t app_config_to_cyw43_auth(app_wifi_security_t security)
     return security == APP_WIFI_SECURITY_WPA2 ? CYW43_AUTH_WPA2_AES_PSK : CYW43_AUTH_OPEN;
 }
 
-static bool wait_for_ipv4_address(struct netif *netif, uint32_t timeout_ms)
+static const char *wifi_link_status_name(int status)
 {
-    absolute_time_t deadline = make_timeout_time_ms(timeout_ms);
-
-    while (ip4_addr_isany_val(*netif_ip4_addr(netif))) {
-        if (time_reached(deadline)) {
-            return false;
-        }
-
-        cyw43_arch_poll();
-        cyw43_arch_wait_for_work_until(make_timeout_time_ms(POLL_INTERVAL_MS));
+    switch (status) {
+    case CYW43_LINK_DOWN:
+        return "DOWN";
+    case CYW43_LINK_JOIN:
+        return "JOIN";
+    case CYW43_LINK_NOIP:
+        return "NOIP";
+    case CYW43_LINK_UP:
+        return "UP";
+    case CYW43_LINK_FAIL:
+        return "FAIL";
+    case CYW43_LINK_NONET:
+        return "NONET";
+    case CYW43_LINK_BADAUTH:
+        return "BADAUTH";
+    default:
+        return "UNKNOWN";
     }
-
-    return true;
 }
 
 static bool connect_wifi_with_blink(const char *ssid, const char *password, uint32_t auth, uint32_t timeout_ms)
@@ -111,10 +119,12 @@ static bool connect_wifi_with_blink(const char *ssid, const char *password, uint
     absolute_time_t deadline = make_timeout_time_ms(timeout_ms);
     absolute_time_t next_blink = get_absolute_time();
     bool led_on = false;
+    int previous_link_status = CYW43_LINK_UP + 1;
     int err;
 
     err = cyw43_arch_wifi_connect_async(ssid, password, auth);
     if (err != 0) {
+        app_log("Wi-Fi connection start failed: error=%d", err);
         status_led_set(false);
         return false;
     }
@@ -124,6 +134,7 @@ static bool connect_wifi_with_blink(const char *ssid, const char *password, uint
     while (!time_reached(deadline)) {
         int link_status;
 
+        watchdog_update();
         cyw43_arch_poll();
 
         if (absolute_time_diff_us(next_blink, get_absolute_time()) <= 0) {
@@ -132,20 +143,38 @@ static bool connect_wifi_with_blink(const char *ssid, const char *password, uint
             next_blink = make_timeout_time_ms(WIFI_CONNECT_LED_BLINK_MS);
         }
 
-        link_status = cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
-        if (link_status == CYW43_LINK_UP || link_status == CYW43_LINK_NOIP || link_status == CYW43_LINK_JOIN) {
+        link_status = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
+        if (link_status != previous_link_status) {
+            app_log("Wi-Fi state: %s (%d)", wifi_link_status_name(link_status), link_status);
+            previous_link_status = link_status;
+        }
+
+        if (link_status == CYW43_LINK_UP) {
             status_led_set(false);
             return true;
         }
 
-        if (link_status == CYW43_LINK_BADAUTH || link_status == CYW43_LINK_FAIL || link_status == CYW43_LINK_NONET) {
+        if (link_status == CYW43_LINK_BADAUTH || link_status == CYW43_LINK_FAIL) {
             status_led_set(false);
             return false;
+        }
+
+        if (link_status == CYW43_LINK_NONET) {
+            err = cyw43_arch_wifi_connect_async(ssid, password, auth);
+            if (err != 0) {
+                app_log("Wi-Fi retry failed: error=%d", err);
+                status_led_set(false);
+                return false;
+            }
         }
 
         cyw43_arch_wait_for_work_until(make_timeout_time_ms(POLL_INTERVAL_MS));
     }
 
+    app_log("Wi-Fi connection timed out after %lu ms; final state=%s (%d)",
+            (unsigned long)timeout_ms,
+            wifi_link_status_name(previous_link_status),
+            previous_link_status);
     status_led_set(false);
     return false;
 }
@@ -170,11 +199,6 @@ static bool init_network_services(const app_config_t *config, struct netif **act
                                      auth,
                                      WIFI_CONNECT_TIMEOUT_MS)) {
             app_log("Wi-Fi connection failed");
-            return false;
-        }
-
-        if (!wait_for_ipv4_address(*active_netif, IP_ACQUIRE_TIMEOUT_MS)) {
-            app_log("Timed out waiting for DHCP address");
             return false;
         }
 
@@ -213,11 +237,6 @@ static bool reconnect_client_network(const app_config_t *config, struct netif *a
                                  auth,
                                  WIFI_CONNECT_TIMEOUT_MS)) {
         app_log("Wi-Fi reconnect failed");
-        return false;
-    }
-
-    if (!wait_for_ipv4_address(active_netif, IP_ACQUIRE_TIMEOUT_MS)) {
-        app_log("Wi-Fi reconnect failed: no DHCP address");
         return false;
     }
 
@@ -287,6 +306,7 @@ static void run_main_application_mode(void)
         uint32_t now_ms;
         absolute_time_t next_poll = make_timeout_time_ms(POLL_INTERVAL_MS);
 
+        watchdog_update();
         cyw43_arch_poll();
         now_ms = to_ms_since_boot(get_absolute_time());
         app_narodmon_poll(now_ms);
@@ -366,18 +386,19 @@ int main(void)
         }
     }
 
+    watchdog_enable(WATCHDOG_TIMEOUT_MS, true);
     status_led_set(true);
 
-    if (!onewire_source_init()) {
-        while (true) {
-            sleep_ms(1000);
-        }
-    }
+
 
     if (usb_host_present_at_boot()) {
         run_usb_mass_storage_mode();
     } else {
-        run_main_application_mode();
+        if (!onewire_source_init()) {
+            while (true) {
+                sleep_ms(1000);
+        }
+    }        run_main_application_mode();
     }
 
     return 0;

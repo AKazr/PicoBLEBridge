@@ -30,6 +30,60 @@ typedef struct {
 
 static app_narodmon_state_t app_narodmon_state;
 
+typedef enum {
+    APP_NARODMON_LOG_NONE = 0,
+    APP_NARODMON_LOG_DNS_ERROR,
+    APP_NARODMON_LOG_CONNECT_ERROR,
+    APP_NARODMON_LOG_WRITE_ERROR,
+    APP_NARODMON_LOG_RECV_ERROR,
+    APP_NARODMON_LOG_TCP_ERROR,
+    APP_NARODMON_LOG_SEND_OK,
+} app_narodmon_log_event_t;
+
+static struct {
+    app_narodmon_log_event_t event;
+    int error;
+    uint16_t payload_len;
+} app_narodmon_pending_log;
+
+static void app_narodmon_defer_log(app_narodmon_log_event_t event, int error, uint16_t payload_len)
+{
+    app_narodmon_pending_log.event = event;
+    app_narodmon_pending_log.error = error;
+    app_narodmon_pending_log.payload_len = payload_len;
+}
+
+static void app_narodmon_flush_log(void)
+{
+    app_narodmon_log_event_t event = app_narodmon_pending_log.event;
+    int error = app_narodmon_pending_log.error;
+    uint16_t payload_len = app_narodmon_pending_log.payload_len;
+
+    app_narodmon_pending_log.event = APP_NARODMON_LOG_NONE;
+    switch (event) {
+    case APP_NARODMON_LOG_DNS_ERROR:
+        app_log("Narodmon send failed: DNS lookup error");
+        break;
+    case APP_NARODMON_LOG_CONNECT_ERROR:
+        app_log("Narodmon send failed: connect error %d", error);
+        break;
+    case APP_NARODMON_LOG_WRITE_ERROR:
+        app_log("Narodmon send failed: tcp_write error %d", error);
+        break;
+    case APP_NARODMON_LOG_RECV_ERROR:
+        app_log("Narodmon send failed: recv error %d", error);
+        break;
+    case APP_NARODMON_LOG_TCP_ERROR:
+        app_log("Narodmon send failed: tcp error %d", error);
+        break;
+    case APP_NARODMON_LOG_SEND_OK:
+        app_log("Narodmon send OK: %u bytes", (unsigned)payload_len);
+        break;
+    default:
+        break;
+    }
+}
+
 static void app_narodmon_reset_state(void)
 {
     memset(&app_narodmon_state, 0, sizeof(app_narodmon_state));
@@ -50,12 +104,8 @@ static void app_narodmon_finish(bool ok, const char *message)
         }
     }
 
-    if (message != NULL) {
-        if (ok) {
-            app_log("%s: %u bytes", message, (unsigned)payload_len);
-        } else {
-            app_log("%s", message);
-        }
+    if (message != NULL && ok) {
+        app_narodmon_defer_log(APP_NARODMON_LOG_SEND_OK, 0, payload_len);
     }
 
     app_narodmon_reset_state();
@@ -172,7 +222,7 @@ static bool app_narodmon_start_connect(const ip_addr_t *ipaddr)
 
     app_narodmon_state.pcb = tcp_new_ip_type(IP_GET_TYPE(ipaddr));
     if (app_narodmon_state.pcb == NULL) {
-        app_log("Narodmon send failed: tcp_new error");
+        app_narodmon_defer_log(APP_NARODMON_LOG_CONNECT_ERROR, ERR_MEM, 0);
         app_narodmon_reset_state();
         return false;
     }
@@ -185,7 +235,7 @@ static bool app_narodmon_start_connect(const ip_addr_t *ipaddr)
 
     err = tcp_connect(app_narodmon_state.pcb, ipaddr, APP_NARODMON_PORT, app_narodmon_connected_cb);
     if (err != ERR_OK) {
-        app_log("Narodmon send failed: tcp_connect error %d", err);
+        app_narodmon_defer_log(APP_NARODMON_LOG_CONNECT_ERROR, err, 0);
         tcp_abort(app_narodmon_state.pcb);
         app_narodmon_reset_state();
         return false;
@@ -206,7 +256,7 @@ static void app_narodmon_dns_found_cb(const char *name, const ip_addr_t *ipaddr,
     app_narodmon_state.dns_pending = false;
 
     if (ipaddr == NULL) {
-        app_log("Narodmon send failed: DNS lookup error");
+        app_narodmon_defer_log(APP_NARODMON_LOG_DNS_ERROR, 0, 0);
         app_narodmon_reset_state();
         return;
     }
@@ -220,7 +270,7 @@ static err_t app_narodmon_connected_cb(void *arg, struct tcp_pcb *tpcb, err_t er
     (void)tpcb;
 
     if (err != ERR_OK) {
-        app_log("Narodmon send failed: connect error %d", err);
+        app_narodmon_defer_log(APP_NARODMON_LOG_CONNECT_ERROR, err, 0);
         app_narodmon_finish(false, NULL);
         return err;
     }
@@ -228,7 +278,7 @@ static err_t app_narodmon_connected_cb(void *arg, struct tcp_pcb *tpcb, err_t er
     app_narodmon_state.connected = true;
     err = app_narodmon_send_next_chunk();
     if (err != ERR_OK) {
-        app_log("Narodmon send failed: tcp_write error %d", err);
+        app_narodmon_defer_log(APP_NARODMON_LOG_WRITE_ERROR, err, 0);
         app_narodmon_finish(false, NULL);
     }
 
@@ -250,7 +300,7 @@ static err_t app_narodmon_sent_cb(void *arg, struct tcp_pcb *tpcb, u16_t len)
 
     err = app_narodmon_send_next_chunk();
     if (err != ERR_OK) {
-        app_log("Narodmon send failed: tcp_write error %d", err);
+        app_narodmon_defer_log(APP_NARODMON_LOG_WRITE_ERROR, err, 0);
         app_narodmon_finish(false, NULL);
     }
 
@@ -268,7 +318,7 @@ static err_t app_narodmon_recv_cb(void *arg, struct tcp_pcb *tpcb, struct pbuf *
     }
 
     if (err != ERR_OK) {
-        app_log("Narodmon send failed: recv error %d", err);
+        app_narodmon_defer_log(APP_NARODMON_LOG_RECV_ERROR, err, 0);
         app_narodmon_finish(false, NULL);
         return err;
     }
@@ -287,7 +337,7 @@ static void app_narodmon_err_cb(void *arg, err_t err)
 {
     (void)arg;
     app_narodmon_state.pcb = NULL;
-    app_log("Narodmon send failed: tcp error %d", err);
+    app_narodmon_defer_log(APP_NARODMON_LOG_TCP_ERROR, err, 0);
     app_narodmon_reset_state();
 }
 
@@ -300,6 +350,8 @@ bool app_narodmon_start_send(void)
     if (app_narodmon_state.busy) {
         return false;
     }
+
+    app_log("Narodmon payload build started");
 
     written = app_narodmon_build_payload(app_narodmon_state.payload, (int)sizeof(app_narodmon_state.payload));
     if (written < 0) {
@@ -334,6 +386,8 @@ bool app_narodmon_start_send(void)
 
 void app_narodmon_poll(uint32_t now_ms)
 {
+    app_narodmon_flush_log();
+
     if (!app_narodmon_state.busy) {
         return;
     }

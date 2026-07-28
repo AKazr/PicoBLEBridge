@@ -107,6 +107,7 @@ static void onewire_worker_handle_start(const onewire_command_t *command, onewir
         return;
     }
 
+    onewire_bus_init(command->gpio);
     onewire_worker_gpio = command->gpio;
     onewire_worker_device_index = 0;
     onewire_worker_device_count = onewire_bus_search(command->gpio,
@@ -148,8 +149,6 @@ static void onewire_worker_main(void)
     onewire_command_t command;
     onewire_response_t response;
 
-    onewire_bus_init(ONEWIRE_GPIO2);
-    onewire_bus_init(ONEWIRE_GPIO3);
     onewire_worker_init_ok = flash_safe_execute_core_init();
     onewire_worker_initialized = true;
 

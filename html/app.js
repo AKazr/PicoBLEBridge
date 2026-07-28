@@ -4,7 +4,8 @@ const App = (() => {
         ['ble', '/ble.html', 'BLE Devices'],
         ['onewire', '/onewire.html', '1-Wire'],
         ['settings', '/settings.html', 'Settings'],
-        ['narodmon', '/narodmon.html', 'Narodmon Payload']
+        ['narodmon', '/narodmon.html', 'Narodmon Payload'],
+        ['logs', '/logs.html', 'Logs']
     ];
 
     function initHeader() {

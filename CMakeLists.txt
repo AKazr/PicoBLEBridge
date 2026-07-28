@@ -15,9 +15,9 @@ if(WIN32)
 else()
     set(USERHOME $ENV{HOME})
 endif()
-set(sdkVersion 2.2.0)
+set(sdkVersion 2.3.0)
 set(toolchainVersion 15_2_Rel1)
-set(picotoolVersion 2.2.0-a4)
+set(picotoolVersion 2.3.0)
 set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
     include(${picoVscode})
@@ -84,6 +84,7 @@ add_executable(BLEBridge
         dhcpserver/dhcpserver.c
         dnsserver/dnsserver.c
         BLEBridge.c
+        app_btstack_cyw43.c
         app_config.c
         app_firmware_update.c
         app_log.c
@@ -92,6 +93,7 @@ add_executable(BLEBridge
         app_storage.c
         app_text.c
         app_web.c
+        app_web_logs.c
         ble_scanner.c
         measurement_store.c
         minIni.c
@@ -127,6 +129,7 @@ pico_set_lwip_httpd_content(pico_httpd_content INTERFACE
         ${CMAKE_CURRENT_LIST_DIR}/html/onewire.html
         ${CMAKE_CURRENT_LIST_DIR}/html/settings.html
         ${CMAKE_CURRENT_LIST_DIR}/html/narodmon.html
+        ${CMAKE_CURRENT_LIST_DIR}/html/logs.html
         ${CMAKE_CURRENT_LIST_DIR}/html/narodmon.ssi
         ${CMAKE_CURRENT_LIST_DIR}/html/style.css
         ${CMAKE_CURRENT_LIST_DIR}/html/app.js
@@ -166,7 +169,9 @@ target_link_libraries(BLEBridge
         pico_lwip_http
         pico_httpd_content
         pico_btstack_ble
-        pico_btstack_cyw43
+        pico_btstack_base
+        pico_btstack_run_loop_async_context
+        pico_btstack_hci_transport_cyw43
         tinyusb_device
         )
 

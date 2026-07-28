@@ -7,7 +7,7 @@
 #include "app_text.h"
 #include "measurement_store.h"
 
-#define MEASUREMENT_STORE_TABLE_SIZE 4096
+#define MEASUREMENT_STORE_TABLE_SIZE 2048
 #define MEASUREMENT_STORE_VIEW_SIZE 150
 #define MEASUREMENT_STORE_RETENTION_DEFAULT_MS (APP_CONFIG_MEASUREMENT_RETENTION_DEFAULT_SECONDS * 1000u)
 #define MEASUREMENT_STORE_REVISION_INTERVAL_MS 1000u
@@ -49,6 +49,7 @@ typedef struct {
 
 static measurement_entry_t measurement_table[MEASUREMENT_STORE_TABLE_SIZE];
 static measurement_view_entry_t measurement_view[MEASUREMENT_STORE_VIEW_SIZE];
+static narodmon_signal_entry_t narodmon_signal_entries[MEASUREMENT_STORE_VIEW_SIZE];
 static uint32_t measurement_retention_ms = MEASUREMENT_STORE_RETENTION_DEFAULT_MS;
 static uint16_t measurement_max_count;
 static uint32_t measurement_last_revision_ms;
@@ -364,12 +365,11 @@ u16_t measurement_store_write_json(char *insert, int insert_len)
 
 int measurement_store_build_narodmon_payload(char *insert, int insert_len, uint32_t uptime_seconds)
 {
-    narodmon_signal_entry_t signal_entries[MEASUREMENT_STORE_VIEW_SIZE];
     int written = 0;
     int exported_signal_devices = 0;
     bool has_sensor_metrics = false;
 
-    memset(signal_entries, 0, sizeof(signal_entries));
+    memset(narodmon_signal_entries, 0, sizeof(narodmon_signal_entries));
 
     {
         int result = snprintf(insert + written,
@@ -392,14 +392,14 @@ int measurement_store_build_narodmon_payload(char *insert, int insert_len, uint3
             continue;
         }
 
-        signal_index = narodmon_find_or_add_signal_entry(signal_entries,
+        signal_index = narodmon_find_or_add_signal_entry(narodmon_signal_entries,
                                                          MEASUREMENT_STORE_VIEW_SIZE,
                                                          exported_signal_devices,
                                                          entry->device_id);
         if (signal_index < 0) {
             continue;
         }
-        if (signal_entries[signal_index].max_samples == 0) {
+        if (narodmon_signal_entries[signal_index].max_samples == 0) {
             ++exported_signal_devices;
         }
 
@@ -431,8 +431,8 @@ int measurement_store_build_narodmon_payload(char *insert, int insert_len, uint3
         written += result;
         has_sensor_metrics = true;
 
-        if (entry->sample_count > signal_entries[signal_index].max_samples) {
-            signal_entries[signal_index].max_samples = entry->sample_count;
+        if (entry->sample_count > narodmon_signal_entries[signal_index].max_samples) {
+            narodmon_signal_entries[signal_index].max_samples = entry->sample_count;
         }
     }
 
@@ -443,15 +443,15 @@ int measurement_store_build_narodmon_payload(char *insert, int insert_len, uint3
     for (int i = 0; i < MEASUREMENT_STORE_VIEW_SIZE; ++i) {
         int result;
 
-        if (!signal_entries[i].in_use) {
+        if (!narodmon_signal_entries[i].in_use) {
             continue;
         }
 
         result = snprintf(insert + written,
                           insert_len - written,
                           "#SIGNAL%06lu#%u\n",
-                          (unsigned long)measurement_device_id_to_display(signal_entries[i].device_id),
-                          (unsigned)signal_entries[i].max_samples);
+                          (unsigned long)measurement_device_id_to_display(narodmon_signal_entries[i].device_id),
+                          (unsigned)narodmon_signal_entries[i].max_samples);
         if (result < 0 || result >= (int)(insert_len - written)) {
             break;
         }

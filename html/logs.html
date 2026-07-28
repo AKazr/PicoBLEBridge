@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BLEBridge Logs</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body data-page="logs">
+    <main>
+        <div data-app-header data-title="Logs"></div>
+
+        <section class="card">
+            <div class="log-actions">
+                <button id="refresh-logs" type="button">Refresh</button>
+            </div>
+            <pre id="log-content" class="log-view">Loading...</pre>
+        </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script>
+        async function loadLogs() {
+            const output = document.getElementById('log-content');
+            const refreshButton = document.getElementById('refresh-logs');
+
+            refreshButton.disabled = true;
+            output.textContent = 'Loading...';
+            try {
+                const response = await fetch('/logs.txt', { cache: 'no-store' });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                output.textContent = await response.text();
+            } catch (error) {
+                output.textContent = 'Failed to load logs';
+            } finally {
+                refreshButton.disabled = false;
+            }
+        }
+
+        App.initHeader();
+        document.getElementById('refresh-logs').addEventListener('click', loadLogs);
+        loadLogs();
+    </script>
+</body>
+</html>
