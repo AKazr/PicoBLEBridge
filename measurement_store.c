@@ -8,7 +8,6 @@
 #include "measurement_store.h"
 
 #define MEASUREMENT_STORE_TABLE_SIZE 2048
-#define MEASUREMENT_STORE_VIEW_SIZE 150
 #define MEASUREMENT_STORE_RETENTION_DEFAULT_MS (APP_CONFIG_MEASUREMENT_RETENTION_DEFAULT_SECONDS * 1000u)
 #define MEASUREMENT_STORE_REVISION_INTERVAL_MS 1000u
 
@@ -59,7 +58,7 @@ static uint32_t measurement_device_id_to_display(uint32_t device_id)
     return device_id % 1000000u;
 }
 
-static const char *measurement_field_name(uint8_t field_type)
+const char *measurement_field_name(measurement_field_t field_type)
 {
     switch ((measurement_field_t)field_type) {
     case MEASUREMENT_FIELD_BATTERY:
@@ -320,6 +319,23 @@ bool measurement_store_add(uint32_t device_id, measurement_field_t field_type, f
     measurement_table[free_index].value = value;
     measurement_table[free_index].timestamp_ms = timestamp_ms;
     return true;
+}
+
+int measurement_store_snapshot(measurement_sample_t *samples, int capacity, uint32_t now_ms)
+{
+    int count = 0;
+
+    measurement_revision(now_ms);
+    for (int i = 0; i < MEASUREMENT_STORE_VIEW_SIZE && count < capacity; ++i) {
+        const measurement_view_entry_t *entry = &measurement_view[i];
+        if (entry->in_use) {
+            samples[count].device_id = entry->device_id;
+            samples[count].field_type = (measurement_field_t)entry->field_type;
+            samples[count].value = entry->average_value;
+            ++count;
+        }
+    }
+    return count;
 }
 
 u16_t measurement_store_write_json(char *insert, int insert_len)

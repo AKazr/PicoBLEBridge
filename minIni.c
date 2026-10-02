@@ -75,7 +75,7 @@ int ini_gets(const char *section, const char *key, const char *def_value, char *
 {
     FIL file;
     FRESULT fr;
-    char line[192];
+    char line[320];
     char current_section[64];
     bool section_match;
 

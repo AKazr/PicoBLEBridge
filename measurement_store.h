@@ -14,6 +14,17 @@ typedef enum {
     MEASUREMENT_FIELD_1WIRE_TEMPERATURE = 4,
 } measurement_field_t;
 
+#define MEASUREMENT_STORE_VIEW_SIZE 150
+
+typedef struct {
+    uint32_t device_id;
+    measurement_field_t field_type;
+    float value;
+} measurement_sample_t;
+
+const char *measurement_field_name(measurement_field_t field_type);
+int measurement_store_snapshot(measurement_sample_t *samples, int capacity, uint32_t now_ms);
+
 void measurement_store_init(uint32_t now_ms);
 void measurement_store_configure(uint32_t retention_seconds, uint16_t max_measurements_per_series);
 void measurement_store_periodic(uint32_t now_ms);

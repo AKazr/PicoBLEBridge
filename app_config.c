@@ -21,6 +21,8 @@ static void app_config_defaults(app_config_t *config)
     snprintf(config->ssid, sizeof(config->ssid), "%s", "BLEBridge");
     snprintf(config->hostname, sizeof(config->hostname), "%s", "blebridge");
     config->channel = 3;
+    config->mqtt.port = 1883;
+    config->mqtt.interval_seconds = APP_CONFIG_MQTT_INTERVAL_DEFAULT_SECONDS;
     config->security = APP_WIFI_SECURITY_OPEN;
     config->measurement_retention_seconds = APP_CONFIG_MEASUREMENT_RETENTION_DEFAULT_SECONDS;
     config->measurement_max_count = APP_CONFIG_MEASUREMENT_MAX_COUNT_DEFAULT;
@@ -308,6 +310,17 @@ void app_config_normalize(app_config_t *config)
         return;
     }
 
+    app_config_trim(config->mqtt.host);
+    if (config->mqtt.port == 0) {
+        config->mqtt.port = 1883;
+    }
+    if (config->mqtt.interval_seconds < APP_CONFIG_MQTT_INTERVAL_MIN_SECONDS) {
+        config->mqtt.interval_seconds = APP_CONFIG_MQTT_INTERVAL_MIN_SECONDS;
+    }
+    if (config->mqtt.interval_seconds > APP_CONFIG_MQTT_INTERVAL_MAX_SECONDS) {
+        config->mqtt.interval_seconds = APP_CONFIG_MQTT_INTERVAL_MAX_SECONDS;
+    }
+
     app_config_trim(config->ssid);
     if (config->ssid[0] == '\0') {
         snprintf(config->ssid, sizeof(config->ssid), "%s", "BLEBridge");
@@ -389,6 +402,16 @@ bool app_config_load(app_config_t *config)
 
     ini_gets("network", "password", "", config->password, sizeof(config->password), APP_CONFIG_PATH);
     config->send_narodmon = ini_getl("network", "send_narodmon", 0, APP_CONFIG_PATH) != 0;
+    config->mqtt.enabled = ini_getl("mqtt", "enabled", 0, APP_CONFIG_PATH) != 0;
+    ini_gets("mqtt", "host", "", config->mqtt.host, sizeof(config->mqtt.host), APP_CONFIG_PATH);
+    ini_gets("mqtt", "username", "", config->mqtt.username, sizeof(config->mqtt.username), APP_CONFIG_PATH);
+    ini_gets("mqtt", "password", "", config->mqtt.password, sizeof(config->mqtt.password), APP_CONFIG_PATH);
+    {
+        long port = ini_getl("mqtt", "port", 1883, APP_CONFIG_PATH);
+        long interval = ini_getl("mqtt", "interval_seconds", APP_CONFIG_MQTT_INTERVAL_DEFAULT_SECONDS, APP_CONFIG_PATH);
+        config->mqtt.port = port > 0 && port <= 65535 ? (uint16_t)port : 1883;
+        config->mqtt.interval_seconds = interval > 0 ? (uint32_t)interval : APP_CONFIG_MQTT_INTERVAL_DEFAULT_SECONDS;
+    }
     {
         long retention_seconds = ini_getl("measurements",
                                           "retention_seconds",
@@ -559,6 +582,24 @@ bool app_config_save(const app_config_t *config)
                                (unsigned long)config->onewire_poll_interval_seconds,
                                config->onewire_gpio2_enabled ? 1 : 0,
                                config->onewire_gpio3_enabled ? 1 : 0)) {
+        f_close(&file);
+        return false;
+    }
+
+    if (!app_config_write_line(&file,
+                               "\n[mqtt]\n"
+                               "enabled=%d\n"
+                               "host=%s\n"
+                               "port=%u\n"
+                               "interval_seconds=%lu\n"
+                               "username=%s\n"
+                               "password=%s\n",
+                               config->mqtt.enabled ? 1 : 0,
+                               config->mqtt.host,
+                               (unsigned)config->mqtt.port,
+                               (unsigned long)config->mqtt.interval_seconds,
+                               config->mqtt.username,
+                               config->mqtt.password)) {
         f_close(&file);
         return false;
     }

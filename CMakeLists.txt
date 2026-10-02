@@ -88,6 +88,7 @@ add_executable(BLEBridge
         app_config.c
         app_firmware_update.c
         app_log.c
+        app_mqtt.c
         app_narodmon.c
         app_runtime_config.c
         app_storage.c
@@ -167,6 +168,7 @@ target_link_libraries(BLEBridge
         pico_multicore
         pico_cyw43_arch_lwip_poll
         pico_lwip_http
+        pico_lwip_mqtt
         pico_httpd_content
         pico_btstack_ble
         pico_btstack_base

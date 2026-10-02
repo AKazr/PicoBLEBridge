@@ -24,6 +24,8 @@
 #define MEM_SIZE                    4000
 #endif
 #define MEMP_NUM_TCP_SEG            32
+// One additional cyclic timer for the MQTT client.
+#define MEMP_NUM_SYS_TIMEOUT        (LWIP_NUM_SYS_TIMEOUT_INTERNAL + 1)
 #define MEMP_NUM_ARP_QUEUE          10
 #define PBUF_POOL_SIZE              24
 #define LWIP_ARP                    1
@@ -58,7 +60,7 @@
 #define LWIP_HTTPD_DYNAMIC_FILE_READ 1
 #define LWIP_HTTPD_FILE_EXTENSION   1
 #define LWIP_HTTPD_MAX_REQ_LENGTH   6144
-#define LWIP_HTTPD_MAX_CGI_PARAMETERS 12
+#define LWIP_HTTPD_MAX_CGI_PARAMETERS 24
 #define LWIP_TCP_KEEPALIVE          1
 #define LWIP_NETIF_TX_SINGLE_PBUF   1
 #define DHCP_DOES_ARP_CHECK         0

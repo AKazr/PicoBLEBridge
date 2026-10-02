@@ -11,6 +11,7 @@
 #include "app_config.h"
 #include "app_log.h"
 #include "app_narodmon.h"
+#include "app_mqtt.h"
 #include "app_runtime_config.h"
 #include "app_storage.h"
 #include "app_web.h"
@@ -179,6 +180,16 @@ static bool connect_wifi_with_blink(const char *ssid, const char *password, uint
     return false;
 }
 
+static bool disable_wifi_power_save(void)
+{
+    int err = cyw43_wifi_pm(&cyw43_state, CYW43_NONE_PM);
+    if (err != 0) {
+        app_log("Unable to disable Wi-Fi power saving: error=%d", err);
+        return false;
+    }
+    return true;
+}
+
 static bool init_network_services(const app_config_t *config, struct netif **active_netif)
 {
     uint32_t auth = app_config_to_cyw43_auth(config->security);
@@ -192,6 +203,9 @@ static bool init_network_services(const app_config_t *config, struct netif **act
         *active_netif = &cyw43_state.netif[CYW43_ITF_STA];
         netif_set_hostname(*active_netif, config->hostname);
         cyw43_arch_enable_sta_mode();
+        if (!disable_wifi_power_save()) {
+            return false;
+        }
         app_log("Connecting to Wi-Fi network '%s' (%s)", config->ssid, app_config_security_name(config->security));
 
         if (!connect_wifi_with_blink(config->ssid,
@@ -214,6 +228,9 @@ static bool init_network_services(const app_config_t *config, struct netif **act
     cyw43_arch_enable_ap_mode(config->ssid,
                               config->password[0] ? config->password : NULL,
                               auth);
+    if (!disable_wifi_power_save()) {
+        return false;
+    }
 
     *active_netif = &cyw43_state.netif[CYW43_ITF_AP];
     netif_set_hostname(*active_netif, config->hostname);
@@ -231,6 +248,9 @@ static bool reconnect_client_network(const app_config_t *config, struct netif *a
 
     app_log("Wi-Fi link lost, attempting reconnect to '%s'", config->ssid);
     cyw43_arch_enable_sta_mode();
+    if (!disable_wifi_power_save()) {
+        return false;
+    }
 
     if (!connect_wifi_with_blink(config->ssid,
                                  config->password[0] ? config->password : NULL,
@@ -295,6 +315,7 @@ static void run_main_application_mode(void)
     ble_scanner_init();
     ble_scanner_apply_config(config);
     onewire_source_apply_config(config);
+    app_mqtt_apply_config(&config->mqtt);
     next_cpu_update = make_timeout_time_ms(1000);
     next_narodmon_send = make_timeout_time_ms(NARODMON_SEND_INTERVAL_MS);
     app_web_set_narodmon_seconds_remaining(NARODMON_SEND_INTERVAL_MS / 1000u);
@@ -314,6 +335,7 @@ static void run_main_application_mode(void)
         ble_scanner_periodic(now_ms);
         onewire_source_periodic(now_ms);
         measurement_store_periodic(now_ms);
+        app_mqtt_poll(now_ms);
 
         config = app_runtime_config_get();
         if (config->mode == APP_WIFI_MODE_CLIENT && cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA) != CYW43_LINK_UP) {

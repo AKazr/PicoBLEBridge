@@ -55,6 +55,34 @@
                     <span>Send data to narodmon.ru every 5 minutes (MAC:<span id="narodmon-device-id">loading...</span>)</span>
                 </label>
 
+                <h2>MQTT</h2>
+                <label class="inline-check">
+                    <input type="checkbox" name="mqtt_enabled" id="mqtt_enabled">
+                    Send data to MQTT
+                </label>
+                <label>
+                    MQTT Host
+                    <input type="text" name="mqtt_host" id="mqtt_host" maxlength="253">
+                </label>
+                <label>
+                    MQTT Port
+                    <input type="number" name="mqtt_port" id="mqtt_port" min="1" max="65535" required>
+                </label>
+                <label>
+                    MQTT Send Interval (s)
+                    <input type="number" name="mqtt_interval_seconds" id="mqtt_interval_seconds" min="5" max="86400" required>
+                </label>
+                <label>
+                    MQTT Username (optional)
+                    <input type="text" name="mqtt_username" id="mqtt_username" maxlength="64">
+                </label>
+                <label>
+                    MQTT Password (optional)
+                    <input type="text" name="mqtt_password" id="mqtt_password" maxlength="64">
+                </label>
+                <p class="muted">MQTT settings apply on Save. Messages contain only the numeric value. MQTT uses TCP without TLS.</p>
+
+                <h2>Measurements</h2>
                 <label>
                     Measurement Retention (s)
                     <input type="number" name="measurement_retention_seconds" id="measurement_retention_seconds" min="5" max="600">
@@ -119,6 +147,12 @@
             document.getElementById('security').value = config.security || 'open';
             document.getElementById('password').value = config.password || '';
             document.getElementById('send_narodmon').checked = !!config.send_narodmon;
+            document.getElementById('mqtt_enabled').checked = !!config.mqtt_enabled;
+            document.getElementById('mqtt_host').value = config.mqtt_host || '';
+            document.getElementById('mqtt_port').value = config.mqtt_port || 1883;
+            document.getElementById('mqtt_interval_seconds').value = config.mqtt_interval_seconds || 60;
+            document.getElementById('mqtt_username').value = config.mqtt_username || '';
+            document.getElementById('mqtt_password').value = config.mqtt_password || '';
             document.getElementById('narodmon-device-id').textContent = config.narodmon_device_id || 'unknown';
             document.getElementById('measurement_retention_seconds').value = config.measurement_retention_seconds || 300;
             document.getElementById('measurement_max_count').value = config.measurement_max_count || 0;

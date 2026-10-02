@@ -21,6 +21,20 @@
 #define APP_CONFIG_ONEWIRE_POLL_INTERVAL_MIN_SECONDS 5u
 #define APP_CONFIG_ONEWIRE_POLL_INTERVAL_MAX_SECONDS 300u
 #define APP_CONFIG_ONEWIRE_POLL_INTERVAL_DEFAULT_SECONDS 30u
+#define APP_CONFIG_MQTT_HOST_MAX_LEN 254
+#define APP_CONFIG_MQTT_CREDENTIAL_MAX_LEN 65
+#define APP_CONFIG_MQTT_INTERVAL_MIN_SECONDS 5u
+#define APP_CONFIG_MQTT_INTERVAL_MAX_SECONDS 86400u
+#define APP_CONFIG_MQTT_INTERVAL_DEFAULT_SECONDS 60u
+
+typedef struct {
+    bool enabled;
+    char host[APP_CONFIG_MQTT_HOST_MAX_LEN];
+    uint16_t port;
+    uint32_t interval_seconds;
+    char username[APP_CONFIG_MQTT_CREDENTIAL_MAX_LEN];
+    char password[APP_CONFIG_MQTT_CREDENTIAL_MAX_LEN];
+} app_mqtt_config_t;
 
 typedef struct {
     uint32_t device_id;
@@ -45,6 +59,7 @@ typedef struct {
     app_wifi_security_t security;
     char password[APP_CONFIG_PASSWORD_MAX_LEN];
     bool send_narodmon;
+    app_mqtt_config_t mqtt;
     uint32_t measurement_retention_seconds;
     uint16_t measurement_max_count;
     uint32_t onewire_poll_interval_seconds;

@@ -12,6 +12,7 @@
 #include "app_firmware_update.h"
 #include "app_log.h"
 #include "app_narodmon.h"
+#include "app_mqtt.h"
 #include "app_runtime_config.h"
 #include "app_storage.h"
 #include "app_text.h"
@@ -124,6 +125,7 @@ static void app_web_apply_config(const app_config_t *config)
     measurement_store_configure(config->measurement_retention_seconds, config->measurement_max_count);
     ble_scanner_apply_config(app_runtime_config_get());
     onewire_source_apply_config(app_runtime_config_get());
+    app_mqtt_apply_config(&config->mqtt);
 }
 
 static const char *app_web_find_param_value(int count, char *params[], char *values[], const char *name)
@@ -155,6 +157,9 @@ static u16_t app_web_write_status_json(char *insert, int insert_len)
                        "\"device_name\":\"%s\","
                        "\"narodmon_device_name\":\"%s\","
                        "\"narodmon_seconds_remaining\":%lu,"
+                       "\"mqtt_status\":\"%s\","
+                       "\"mqtt_last_error\":\"%s\","
+                       "\"mqtt_last_send_seconds\":%lu,"
                        "\"device_table_used\":%d,"
                        "\"device_table_capacity\":%d,"
                        "\"measurement_table_used\":%d,"
@@ -169,6 +174,9 @@ static u16_t app_web_write_status_json(char *insert, int insert_len)
                        device_name,
                        device_name,
                        (unsigned long)app_web_narodmon_seconds_remaining,
+                       app_mqtt_status(),
+                       app_mqtt_last_error(),
+                       (unsigned long)app_mqtt_last_send_seconds(),
                        ble_scanner_device_table_used(),
                        ble_scanner_device_table_capacity(),
                        ble_scanner_measurement_table_used(),
@@ -199,6 +207,9 @@ static u16_t app_web_write_config_json(char *insert, int insert_len)
     char ssid[APP_CONFIG_SSID_MAX_LEN * 2];
     char hostname[APP_CONFIG_HOSTNAME_MAX_LEN * 2];
     char password[APP_CONFIG_PASSWORD_MAX_LEN * 2];
+    char mqtt_host[APP_CONFIG_MQTT_HOST_MAX_LEN * 2];
+    char mqtt_username[APP_CONFIG_MQTT_CREDENTIAL_MAX_LEN * 2];
+    char mqtt_password[APP_CONFIG_MQTT_CREDENTIAL_MAX_LEN * 2];
     char save_status[APP_WEB_SAVE_STATUS_MAX_LEN * 2];
     char build_datetime[64];
     char narodmon_device_id[APP_NARODMON_DEVICE_ID_LEN];
@@ -207,6 +218,9 @@ static u16_t app_web_write_config_json(char *insert, int insert_len)
     app_text_json_escape(ssid, sizeof(ssid), config->ssid);
     app_text_json_escape(hostname, sizeof(hostname), config->hostname);
     app_text_json_escape(password, sizeof(password), config->password);
+    app_text_json_escape(mqtt_host, sizeof(mqtt_host), config->mqtt.host);
+    app_text_json_escape(mqtt_username, sizeof(mqtt_username), config->mqtt.username);
+    app_text_json_escape(mqtt_password, sizeof(mqtt_password), config->mqtt.password);
     app_text_json_escape(save_status, sizeof(save_status), app_web_save_status_valid ? app_web_save_status : "");
     app_text_json_escape(build_datetime, sizeof(build_datetime), APP_BUILD_DATETIME);
     if (!app_narodmon_get_device_id(narodmon_device_id, sizeof(narodmon_device_id))) {
@@ -222,6 +236,12 @@ static u16_t app_web_write_config_json(char *insert, int insert_len)
                        "\"security\":\"%s\","
                        "\"password\":\"%s\","
                        "\"send_narodmon\":%s,"
+                       "\"mqtt_enabled\":%s,"
+                       "\"mqtt_host\":\"%s\","
+                       "\"mqtt_port\":%u,"
+                       "\"mqtt_interval_seconds\":%lu,"
+                       "\"mqtt_username\":\"%s\","
+                       "\"mqtt_password\":\"%s\","
                        "\"narodmon_device_id\":\"%s\","
                        "\"measurement_retention_seconds\":%lu,"
                        "\"measurement_max_count\":%u,"
@@ -239,6 +259,12 @@ static u16_t app_web_write_config_json(char *insert, int insert_len)
                        app_config_security_name(config->security),
                        password,
                        config->send_narodmon ? "true" : "false",
+                       config->mqtt.enabled ? "true" : "false",
+                       mqtt_host,
+                       (unsigned)config->mqtt.port,
+                       (unsigned long)config->mqtt.interval_seconds,
+                       mqtt_username,
+                       mqtt_password,
                        narodmon_device_id,
                        (unsigned long)config->measurement_retention_seconds,
                        (unsigned)config->measurement_max_count,
@@ -274,6 +300,74 @@ static u16_t app_web_write_narodmon_text(char *insert, int insert_len)
     }
 
     return (u16_t)written;
+}
+
+static bool app_web_read_mqtt_string(const char *value, char *destination, size_t capacity)
+{
+    char decoded[APP_CONFIG_MQTT_HOST_MAX_LEN * 3];
+
+    if (value == NULL) {
+        return true;
+    }
+    if (strlen(value) >= sizeof(decoded) || strstr(value, "%00") != NULL) {
+        return false;
+    }
+    snprintf(decoded, sizeof(decoded), "%s", value);
+    app_text_url_decode(decoded);
+    if (strlen(decoded) >= capacity) {
+        return false;
+    }
+    for (const char *p = decoded; *p != '\0'; ++p) {
+        if ((unsigned char)*p < 0x20u || *p == 0x7f) {
+            return false;
+        }
+    }
+    snprintf(destination, capacity, "%s", decoded);
+    return true;
+}
+
+static bool app_web_read_mqtt_number(const char *value, uint32_t minimum, uint32_t maximum, uint32_t *number)
+{
+    if (value == NULL) {
+        return true;
+    }
+    if (*value == '\0' || strlen(value) > 5) {
+        return false;
+    }
+    for (const char *p = value; *p != '\0'; ++p) {
+        if (*p < '0' || *p > '9') {
+            return false;
+        }
+    }
+    uint32_t parsed = (uint32_t)strtoul(value, NULL, 10);
+    if (parsed < minimum || parsed > maximum) {
+        return false;
+    }
+    *number = parsed;
+    return true;
+}
+
+static bool app_web_read_mqtt_config(int count, char *params[], char *values[])
+{
+    app_mqtt_config_t *mqtt = &app_web_next_config.mqtt;
+    uint32_t port = mqtt->port;
+
+    mqtt->enabled = app_web_find_param_value(count, params, values, "mqtt_enabled") != NULL;
+    if (!app_web_read_mqtt_string(app_web_find_param_value(count, params, values, "mqtt_host"), mqtt->host, sizeof(mqtt->host)) ||
+        !app_web_read_mqtt_string(app_web_find_param_value(count, params, values, "mqtt_username"), mqtt->username, sizeof(mqtt->username)) ||
+        !app_web_read_mqtt_string(app_web_find_param_value(count, params, values, "mqtt_password"), mqtt->password, sizeof(mqtt->password))) {
+        app_web_set_save_status("Save failed: MQTT text is too long or contains control characters");
+        return false;
+    }
+    if (!app_web_read_mqtt_number(app_web_find_param_value(count, params, values, "mqtt_port"), 1, 65535, &port) ||
+        !app_web_read_mqtt_number(app_web_find_param_value(count, params, values, "mqtt_interval_seconds"),
+                                  APP_CONFIG_MQTT_INTERVAL_MIN_SECONDS, APP_CONFIG_MQTT_INTERVAL_MAX_SECONDS,
+                                  &mqtt->interval_seconds)) {
+        app_web_set_save_status("Save failed: MQTT port must be 1..65535 and interval 5..86400 seconds");
+        return false;
+    }
+    mqtt->port = (uint16_t)port;
+    return true;
 }
 
 static const char *app_web_cgi_settings_handler(int iIndex, int iNumParams, char *pcParam[], char *pcValue[])
@@ -376,7 +470,20 @@ static const char *app_web_cgi_settings_handler(int iIndex, int iNumParams, char
     value = app_web_find_param_value(iNumParams, pcParam, pcValue, "onewire_gpio3_enabled");
     app_web_next_config.onewire_gpio3_enabled = value != NULL;
 
+    if (!app_web_read_mqtt_config(iNumParams, pcParam, pcValue)) {
+        return "/settings.html";
+    }
     app_config_normalize(&app_web_next_config);
+
+    if (app_web_next_config.mqtt.enabled && app_web_next_config.mqtt.host[0] == '\0') {
+        app_web_set_save_status("Save failed: MQTT host is required");
+        return "/settings.html";
+    }
+    if (app_web_next_config.mqtt.enabled && app_web_next_config.mqtt.password[0] != '\0' &&
+        app_web_next_config.mqtt.username[0] == '\0') {
+        app_web_set_save_status("Save failed: MQTT password requires a username");
+        return "/settings.html";
+    }
 
     if (app_web_next_config.security == APP_WIFI_SECURITY_WPA2 && strlen(app_web_next_config.password) < 8) {
         app_web_set_save_status("Save failed: WPA2 password must be at least 8 characters");
